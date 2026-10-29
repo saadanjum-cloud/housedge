@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase, fn, signIn } from '../supabase.js';
 import { api } from '../lib.js';
-import { DEMO } from '../demo.js';
 import { ErrorBox } from '../ui.jsx';
 import { LegalLinks } from './Legal.jsx';
 import { Aurora, Logo } from '../motion.jsx';
@@ -104,12 +103,12 @@ export function SignUp() {
         await fn('join', { action: 'signup', fullName: v.name, email: v.email, company: v.company, website: v.website, password: v.password });
         await signIn(v.email, v.password);
       }} fields={[
-        { name: 'name', label: 'Your name', auto: 'name', value: DEMO?.signup.name },
-        { name: 'email', label: 'Work email', type: 'email', auto: 'email', value: DEMO?.signup.email },
-        { name: 'company', label: 'Company name', auto: 'organization', value: DEMO?.signup.company },
-        { name: 'website', label: 'Company website (optional)', auto: 'url', optional: true, value: DEMO?.signup.website },
-        { name: 'password', label: NEW_PASSWORD, type: 'password', auto: 'new-password', value: DEMO?.signup.password },
-        { name: 'confirm', label: 'Repeat the password', type: 'password', auto: 'new-password', value: DEMO?.signup.password },
+        { name: 'name', label: 'Your name', auto: 'name' },
+        { name: 'email', label: 'Work email', type: 'email', auto: 'email' },
+        { name: 'company', label: 'Company name', auto: 'organization' },
+        { name: 'website', label: 'Company website (optional)', auto: 'url', optional: true },
+        { name: 'password', label: NEW_PASSWORD, type: 'password', auto: 'new-password' },
+        { name: 'confirm', label: 'Repeat the password', type: 'password', auto: 'new-password' },
       ]} />
       <a href="/login" className="mt-4 block text-center text-[13px] text-accent hover:underline">Already have an account? Sign in</a>
     </Frame>
