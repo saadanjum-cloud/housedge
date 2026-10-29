@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { MetaCtx, useMeta, ProjectCtx, UserCtx, useUser } from './ctx.js';
 import { motion } from 'framer-motion';
 import { Logo, PageIn, Skeleton } from './motion.jsx';
@@ -7,41 +7,52 @@ import {
   LayoutDashboard, MessageSquareText, Link2, Users, ListChecks, FileText, Settings, Plus, FolderKanban,
   Sun, Moon, Monitor, LogOut, Check, Inbox, Globe, Play, Loader2, Download, Route as RouteIcon, ClipboardList, Lightbulb, ListTodo, Send, Menu, X, ShieldCheck, WandSparkles, Gauge,
 } from 'lucide-react';
-import { api, authHeaders, useApi, setTheme, useDark, useFilters, fmtDate, PREVIEW } from './lib.js';
-import { supabase } from './supabase.js';
+import { api, authHeaders, useApi, setTheme, useDark, useFilters, fmtDate, PREVIEW, signOut, useIdleSignOut, hasSavedSession } from './lib.js';
 import { Spinner, SimBadge, Badge, ErrorBox, useToast, Segmented } from './ui.jsx';
-import { Login, Setup, Invite, Reset, ResetPassword, AdminLogin, SignUp } from './pages/Auth.jsx';
-import Onboarding from './pages/Onboarding.jsx';
-import { AdminClients, AdminClient } from './pages/Admin.jsx';
+const authPage = name => lazy(() => import('./pages/Auth.jsx').then(m => ({ default: m[name] })));
+const [Login, Setup, Invite, Reset, ResetPassword, AdminLogin, SignUp] = ['Login', 'Setup', 'Invite', 'Reset', 'ResetPassword', 'AdminLogin', 'SignUp'].map(authPage);
+const Onboarding = lazy(() => import('./pages/Onboarding.jsx'));
+const AdminClients = lazy(() => import('./pages/Admin.jsx').then(m => ({ default: m.AdminClients })));
+const AdminClient = lazy(() => import('./pages/Admin.jsx').then(m => ({ default: m.AdminClient })));
 import { Privacy, Terms, LegalNotice, LegalLinks } from './pages/Legal.jsx';
-import Projects from './pages/Projects.jsx';
-import Overview from './pages/Overview.jsx';
-import Journey from './pages/Journey.jsx';
-import Discovery from './pages/Discovery.jsx';
-import Prompts from './pages/Prompts.jsx';
-import Competitors from './pages/Competitors.jsx';
-import Sources from './pages/Sources.jsx';
-import Chats from './pages/Chats.jsx';
-import Actions from './pages/Actions.jsx';
-import Reports, { ReportView } from './pages/Reports.jsx';
-import ProjectSettings from './pages/ProjectSettings.jsx';
-import SettingsPage from './pages/Settings.jsx';
+const Projects = lazy(() => import('./pages/Projects.jsx'));
+const Overview = lazy(() => import('./pages/Overview.jsx'));
+const Journey = lazy(() => import('./pages/Journey.jsx'));
+const Discovery = lazy(() => import('./pages/Discovery.jsx'));
+const Prompts = lazy(() => import('./pages/Prompts.jsx'));
+const Competitors = lazy(() => import('./pages/Competitors.jsx'));
+const Sources = lazy(() => import('./pages/Sources.jsx'));
+const Chats = lazy(() => import('./pages/Chats.jsx'));
+const Actions = lazy(() => import('./pages/Actions.jsx'));
+const Reports = lazy(() => import('./pages/Reports.jsx'));
+const ReportView = lazy(() => import('./pages/Reports.jsx').then(m => ({ default: m.ReportView })));
+const ProjectSettings = lazy(() => import('./pages/ProjectSettings.jsx'));
+const SettingsPage = lazy(() => import('./pages/Settings.jsx'));
 import Home from './pages/Home.jsx';
-import Enquiries from './pages/Enquiries.jsx';
-import Readiness from './pages/Readiness.jsx';
+const Enquiries = lazy(() => import('./pages/Enquiries.jsx'));
+const Readiness = lazy(() => import('./pages/Readiness.jsx'));
 import ProjectSwitcher from './ProjectSwitcher.jsx';
-import Optimise from './pages/Optimise.jsx';
-import WorkLog from './pages/WorkLog.jsx';
-import Account from './pages/Account.jsx';
-import Outreach from './pages/Outreach.jsx';
-import Assistant from './Assistant.jsx';
+const Optimise = lazy(() => import('./pages/Optimise.jsx'));
+const WorkLog = lazy(() => import('./pages/WorkLog.jsx'));
+const Account = lazy(() => import('./pages/Account.jsx'));
+const Outreach = lazy(() => import('./pages/Outreach.jsx'));
+const Assistant = lazy(() => import('./Assistant.jsx'));
 
+
+// No saved sign-in in this browser: the visitor cannot be signed in, so the public pages render at once instead of
+// waiting for the server to confirm it.
+const PUBLIC_FIRST = ['/', '/website', '/login', '/admin/login', '/onboarding', '/privacy', '/terms', '/legal'];
 
 export default function App() {
   const [auth, setAuth] = useState(null);
   const loc = useLocation();
   useEffect(() => { api('/auth/state').then(setAuth).catch(() => setAuth({ user: null })); }, [loc.pathname === '/login']);
-  if (!auth) return <Spinner />;
+  const state = auth || (PUBLIC_FIRST.includes(loc.pathname) && !hasSavedSession() ? { user: null } : null);
+  if (!state) return <Spinner />;
+  return <Suspense fallback={<Spinner />}><AppRoutes auth={state} loc={loc} /></Suspense>;
+}
+
+function AppRoutes({ auth, loc }) {
   return (
     <Routes>
       <Route path="/login" element={auth.needsSetup ? <Navigate to="/setup" /> : auth.user ? <Navigate to="/" replace /> : <Login />} />
@@ -64,6 +75,7 @@ export default function App() {
 }
 
 function Authed({ user, bare, children }) {
+  useIdleSignOut(user.role !== 'client');
   const meta = useApi('/meta');
   const loc = useLocation();
   if (!meta.data) return meta.error ? <div className="p-8"><ErrorBox error={meta.error} /></div> : <Spinner />;
@@ -76,7 +88,7 @@ function Authed({ user, bare, children }) {
     <div className="mx-auto grid min-h-screen max-w-md content-center gap-4 p-8 text-center">
       <h1 className="text-[24px] font-bold tracking-display">Thanks, {user.name.split(' ')[0]}</h1>
       <p className="text-sm text-muted">Your account is waiting for the Housedge team to open it. We will be in touch at {user.email}. Then sign in again to set up your brand.</p>
-      <button className="btn-ghost mx-auto" onClick={async () => { await supabase.auth.signOut(); window.location.href = '/login'; }}><LogOut size={14} />Sign out</button>
+      <button className="btn-ghost mx-auto" onClick={signOut}><LogOut size={14} />Sign out</button>
     </div>
   );
   const team = user.role !== 'client';
@@ -165,7 +177,7 @@ function Shell({ user }) {
   const loc = useLocation();
   useEffect(() => setOpen(false), [loc.pathname]);
   const pid = loc.pathname.match(/^\/p\/(\d+)/)?.[1];
-  const logout = async () => { await supabase.auth.signOut(); window.location.href = '/login'; };
+  const logout = signOut;
   const team = user.role !== 'client';
 
   // Grouped like the client workflow: look, analyse, improve, deliver. Team-only pages are hidden from clients.
@@ -245,7 +257,7 @@ function Shell({ user }) {
         {PREVIEW && <div className="no-print mx-auto mb-4 max-w-[1280px] rounded-2xl bg-accentSoft px-5 py-3 text-[13px] text-ink">
           <strong>Read-only preview.</strong> Click anything to look around. Saving, "Run now", downloads and some filters (country, tag, search) only work in the real app.</div>}
         <div className="mx-auto max-w-[1280px] print-full">
-          <PageIn key={pid ? `p${pid}` : loc.pathname}><Outlet context={{ reloadProjects: projects.reload }} /></PageIn>
+          <PageIn key={pid ? `p${pid}` : loc.pathname}><Suspense fallback={<Spinner />}><Outlet context={{ reloadProjects: projects.reload }} /></Suspense></PageIn>
         </div>
       </main>
     </div>
@@ -342,8 +354,8 @@ function ProjectLayout() {
       )}
       {running ? <Research run={runState} project={project} />
         : !project.last_run_at && loc.pathname.endsWith('/overview') ? <FirstCheck project={project} onStart={runNow} readOnly={readOnly} />
-          : <PageIn key={`${loc.pathname}-${version}`}><Outlet /></PageIn>}
-      <Assistant project={project} />
+          : <PageIn key={`${loc.pathname}-${version}`}><Suspense fallback={<Spinner />}><Outlet /></Suspense></PageIn>}
+      <Suspense fallback={null}><Assistant project={project} /></Suspense>
     </ProjectCtx.Provider>
   );
 }

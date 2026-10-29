@@ -200,8 +200,16 @@ mark.brand { background: transparent; border-bottom: 2px solid; padding: 0 2px; 
 .hz .hz-ticker { display: flex; width: max-content; animation: hz-ticker 70s linear infinite; }
 .hz .hz-ticker.rev { animation-direction: reverse; }
 .hz .hz-ticker-wrap:hover .hz-ticker { animation-play-state: paused; }
+.hz .hz-ticker.paused { animation-play-state: paused; }
+/* The HTML first screen (index.html) is shown only on the home page, until the app replaces it. */
+.hz-boot { display: none; }
+.boot-home .hz-boot { display: block; }
+/* Sections far below the fold are not rendered until they come near the screen. */
+.hz .hz-cv { content-visibility: auto; contain-intrinsic-size: auto 900px; }
 .hz .hz-fade-x { mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
 @keyframes hz-ticker { to { transform: translateX(-50%); } }
+.hz .hz-float { animation: hz-float 4s ease-in-out infinite; }
+@keyframes hz-float { 50% { transform: translateY(-3px); } }
 .hz .hz-caret { display: inline-block; width: .45em; height: 1em; background: var(--hz-accent); margin-left: 2px; vertical-align: -0.12em; animation: hz-blink 1s steps(2) infinite; }
 @keyframes hz-blink { 50% { opacity: 0; } }
 .hz button:focus:not(:focus-visible), .hz a:focus:not(:focus-visible) { outline: none; }
@@ -216,4 +224,4 @@ mark.brand { background: transparent; border-bottom: 2px solid; padding: 0 2px; 
   -webkit-mask: conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / 14px 51% repeat-x, conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / 14px 51% repeat-x;
   mask: conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / 14px 51% repeat-x, conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / 14px 51% repeat-x; }
 .hz .hz-leader { flex: 1; border-bottom: 1px dotted var(--hz-muted); margin: 0 .5em .3em; }
-@media (prefers-reduced-motion: reduce) { .hz .hz-ticker, .hz .hz-caret, .hz .hz-dots span, .hz .hz-shimmer { animation: none !important; } .hz .hz-mark { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .hz .hz-ticker, .hz .hz-caret, .hz .hz-dots span, .hz .hz-shimmer, .hz .hz-float { animation: none !important; } .hz .hz-mark { transition: none; } }

@@ -1,6 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { supabase, REGION } from './supabase.js';
+// The sign-in library is loaded only when it is needed, so first-time visitors do not download it.
+const loadSupabase = () => import('./supabase.js').then(m => m.supabase);
+// Functions run next to the database (Frankfurt is the nearest function region to Stockholm).
+export const REGION = 'eu-central-1';
+// True when this browser holds a saved sign-in; without one the visitor cannot be signed in.
+export const hasSavedSession = () => { try { return Object.keys(localStorage).some(k => k.startsWith('sb-') && k.endsWith('-auth-token')); } catch { return true; } };
 
 // Links that came from AI answers: only open plain web addresses.
 export const safeHref = u => { try { const x = new URL(u); return x.protocol === 'https:' || x.protocol === 'http:' ? x.href : undefined; } catch { return undefined; } };
@@ -23,8 +28,50 @@ function previewAnswer(path, method) {
 
 // Same /api requests as before; they now carry the Supabase sign-in token and run next to the database.
 export async function authHeaders() {
-  const { data } = await supabase.auth.getSession();
+  if (!hasSavedSession()) return { 'x-region': REGION };
+  const { data } = await (await loadSupabase()).auth.getSession();
   return { 'x-region': REGION, ...(data.session ? { Authorization: `Bearer ${data.session.access_token}` } : {}) };
+}
+
+// Signing out: ends the session on every device (scope 'global' revokes all refresh tokens), forgets this tab's
+// temporary data and replaces the page, so the Back button cannot bring the signed-in screen back.
+let signingOut = false;
+export async function signOut() {
+  signingOut = true;
+  // Ask the server to end every session, but never wait more than a few seconds for it…
+  await Promise.race([loadSupabase().then(sb => sb.auth.signOut({ scope: 'global' })).catch(() => {}), new Promise(r => setTimeout(r, 3000))]);
+  // …and always remove the sign-in token from this browser, even if that request failed or stalled.
+  try {
+    Object.keys(localStorage).filter(k => k.startsWith('sb-') && k.endsWith('-auth-token')).forEach(k => localStorage.removeItem(k));
+    localStorage.removeItem(LAST_ACTIVE);
+    sessionStorage.clear();
+  } catch { /* private mode */ }
+  window.location.replace('/login');
+}
+
+// While a signed-in screen is open: idle sign-out (team after 1 hour without activity, clients after 12 hours; activity in any tab
+// counts, as the time is shared through localStorage, and a session left open overnight ends on the next visit), and sign-out in other tabs.
+const LAST_ACTIVE = 'lastActive';
+export function useIdleSignOut(team) {
+  useEffect(() => {
+    if (PREVIEW) return;
+    const limit = (team ? 60 : 12 * 60) * 60 * 1000;
+    const read = () => { try { return +localStorage.getItem(LAST_ACTIVE) || 0; } catch { return 0; } };
+    const touch = () => { try { localStorage.setItem(LAST_ACTIVE, String(Date.now())); } catch { /* private mode */ } };
+    const check = () => { const last = read(); if (last && Date.now() - last > limit) signOut(); };
+    check();
+    if (!read()) touch();
+    let lastWrite = 0;
+    const onActivity = () => { if (Date.now() - lastWrite > 30000) { lastWrite = Date.now(); touch(); } };
+    const events = ['pointerdown', 'keydown', 'scroll', 'touchstart'];
+    events.forEach(e => window.addEventListener(e, onActivity, { passive: true }));
+    document.addEventListener('visibilitychange', check);
+    const t = setInterval(check, 60000);
+    // Signed out in another tab, or the session was revoked: leave the signed-in screen at once.
+    let sub, gone = false;
+    loadSupabase().then(sb => { if (!gone) sub = sb.auth.onAuthStateChange(event => { if (event === 'SIGNED_OUT' && !signingOut) window.location.replace('/login'); }).data.subscription; });
+    return () => { gone = true; events.forEach(e => window.removeEventListener(e, onActivity)); document.removeEventListener('visibilitychange', check); clearInterval(t); sub?.unsubscribe(); };
+  }, [team]);
 }
 
 export async function api(path, { method = 'GET', body } = {}) {
@@ -35,7 +82,7 @@ export async function api(path, { method = 'GET', body } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (res.status === 401 && !path.startsWith('/auth')) { window.location.href = '/login'; throw new Error('Please log in.'); }
+  if (res.status === 401 && !path.startsWith('/auth')) { window.location.replace('/login'); throw new Error('Please log in.'); }
   if (!res.ok) throw new Error(data.error || `Something went wrong (${res.status}).`);
   return data;
 }

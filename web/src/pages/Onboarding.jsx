@@ -3,7 +3,7 @@
 // Uses the same requests as the rest of the app (/projects, /orgs, /me), so security rules apply as everywhere else.
 import { useMemo, useRef, useState } from 'react';
 import { Check, Plus, Trash2, Upload, FileText, Sparkles, Loader2 } from 'lucide-react';
-import { api } from '../lib.js';
+import { api, signOut } from '../lib.js';
 import { supabase } from '../supabase.js';
 import { useMeta, useUser } from '../ctx.js';
 import { ErrorBox } from '../ui.jsx';
@@ -178,7 +178,7 @@ export default function Onboarding() {
     <div className="min-h-screen">
       <header className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--line)' }}>
         <span className="flex items-center gap-2.5"><Logo size={28} /><span className="text-[15px] font-semibold">Housedge</span></span>
-        <button className="btn-ghost btn-sm" onClick={async () => { await supabase.auth.signOut(); window.location.href = '/login'; }}>Sign out</button>
+        <button className="btn-ghost btn-sm" onClick={signOut}>Sign out</button>
       </header>
       <div className="mx-auto grid max-w-5xl gap-10 px-6 py-10 md:grid-cols-[200px_1fr]">
         <ol className="hidden content-start gap-1 md:grid" aria-label="Setup steps">

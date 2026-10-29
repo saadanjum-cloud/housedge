@@ -43,8 +43,7 @@ function LiveLogo({ size = 32, className = '' }) {
   const on = useInView(ref, { once: true });
   const reduce = useReducedMotion();
   return (
-    <motion.span ref={ref} className={`inline-block align-middle ${className}`} style={{ width: size, height: size }} whileHover={{ rotate: 25, scale: 1.08 }}
-      animate={reduce ? undefined : { y: [0, -3, 0] }} transition={{ y: { duration: 4, repeat: Infinity, ease: 'easeInOut' } }}>
+    <motion.span ref={ref} className={`inline-block align-middle ${reduce ? '' : 'hz-float'} ${className}`} style={{ width: size, height: size }} whileHover={{ rotate: 25, scale: 1.08 }}>
       {on && <Logo size={size} draw />}
     </motion.span>
   );
@@ -101,14 +100,17 @@ function Count({ to, from = 0, decimals = 0, duration = 1, delay = 0, start = tr
   return <>{n.toFixed(decimals)}</>;
 }
 
-function Photo({ name, alt, className = '', speed = 0 }) {
+// Parallax costs work on every scroll frame; phones and tablets get still photos.
+const DESKTOP = typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px) and (pointer: fine)').matches;
+function Photo({ name, alt, className = '', speed = 0, eager = false }) {
   const ref = useRef(null);
   const reduce = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] });
-  const y = useTransform(scrollYProgress, [0, 1], reduce || !speed ? ['0%', '0%'] : [`${-speed}%`, `${speed}%`]);
+  const still = reduce || !speed || !DESKTOP;
+  const y = useTransform(scrollYProgress, [0, 1], still ? ['0%', '0%'] : [`${-speed}%`, `${speed}%`]);
   return (
     <div ref={ref} className={`hz-photo ${className}`}>
-      <motion.img src={`/photos/${name}.webp`} alt={alt} loading="lazy" decoding="async" style={{ y, scale: speed ? 1.14 : 1 }} />
+      <motion.img src={`/photos/${name}.webp`} alt={alt} loading={eager ? 'eager' : 'lazy'} fetchPriority={eager ? 'high' : 'auto'} decoding="async" style={{ y, scale: still ? 1 : 1.14 }} />
     </div>
   );
 }
@@ -119,19 +121,17 @@ export default function Home({ signedIn }) {
       <Header signedIn={signedIn} />
       <Hero />
       <Ticker />
-      <Statement />
-      <WhoAsks />
-      <FourAnswers />
-      <WhyNow />
-      <Ledger />
-      <Different />
-      <WhoFor />
-      <Faq />
-      <CtaPhoto />
-      <Contact />
-      <Footer signedIn={signedIn} />
+      {[Statement, WhoAsks, FourAnswers, WhyNow, Ledger, Different, WhoFor, Faq, CtaPhoto, Contact].map((Section, i) => <Later key={i} i={i}><Section /></Later>)}
+      <Later i={10}><Footer signedIn={signedIn} /></Later>
     </div>
   );
+}
+
+// Renders its section shortly after the first screen is drawn, one section per task (no long freeze on phones).
+function Later({ i, children }) {
+  const [on, setOn] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setOn(true), 120 + i * 30); return () => clearTimeout(t); }, [i]);
+  return on ? children : <div style={{ height: '100vh' }} aria-hidden />;
 }
 
 // ---------- header ----------
@@ -146,7 +146,7 @@ function Header({ signedIn }) {
   const links = [['#how', 'How it works'], ['#who', 'Who it is for'], ['#faq', 'Questions']];
   const solid = scrolled || open;
   return (
-    <header className="sticky top-0 z-50 transition-colors duration-300" style={{ background: solid ? 'rgba(245,247,243,.9)' : 'transparent', backdropFilter: solid ? 'blur(10px)' : undefined, borderBottom: `1px solid ${solid ? 'var(--hz-rule)' : 'transparent'}` }}>
+    <header className="sticky top-0 z-50 transition-colors duration-300" style={{ background: solid ? '#f5f7f3' : 'transparent', borderBottom: `1px solid ${solid ? 'var(--hz-rule)' : 'transparent'}` }}>
       <div className="mx-auto flex h-16 max-w-[1240px] items-center justify-between px-5 sm:px-8">
         <Link to="/website" className="hz-display flex items-center gap-2.5 text-[22px] leading-none" aria-label="Housedge home">
           <motion.span whileHover={{ rotate: 25, scale: 1.08 }} className="inline-block"><Logo size={30} draw /></motion.span>Housedge
@@ -242,13 +242,13 @@ function AnswerSlip() {
 function Hero() {
   return (
     <Wrap className="pb-16 pt-10 sm:pt-16">
-      <div className="grid items-end gap-12 lg:grid-cols-12">
-        <div className="lg:col-span-7">
-          <Reveal><Label color="var(--hz-accent)" className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full" style={{ background: 'var(--hz-accent)' }} />The new word of mouth</Label></Reveal>
-          <motion.h1 className="hz-display mt-6 text-[clamp(46px,6.4vw,96px)] leading-[0.98]" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1, ease: EASE }}>
+      <div className="grid items-start gap-12 lg:grid-cols-12">
+        <div className="lg:col-span-7 lg:pt-20">
+          <Label color="var(--hz-accent)" className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full" style={{ background: 'var(--hz-accent)' }} />The new word of mouth</Label>
+          <h1 className="hz-display mt-6 text-[clamp(46px,6.4vw,96px)] leading-[0.98]">
             Your customers ask AI. <span className="block">Does it name <Circled delay={0.6}><em>you</em></Circled>?</span>
-          </motion.h1>
-          <Reveal delay={0.25}>
+          </h1>
+          <div>
             <p className="mt-8 max-w-[560px] text-[19px] leading-[1.55]" style={{ color: 'var(--hz-ink2)' }}>
               Every week Housedge asks ChatGPT, Gemini, Perplexity and Claude the questions your customers ask, keeps every answer, and shows you who gets recommended, why, and what to change.
             </p>
@@ -257,12 +257,10 @@ function Hero() {
               <a href="#answers" className="hz-link text-[16px] font-medium">See four answers ↓</a>
             </div>
             <Label className="mt-6">Free · set up in minutes · data kept in the EU</Label>
-          </Reveal>
+          </div>
         </div>
         <div className="relative lg:col-span-5">
-          <Reveal delay={0.15}>
-            <Photo name="hands-phone-hoehne" alt="Hands holding a phone" className="ml-auto aspect-[4/5] w-[86%] rounded-[6px] sm:w-[66%] lg:w-[88%]" speed={6} />
-          </Reveal>
+          <Photo name="hands-phone-hoehne" alt="Hands holding a phone" className="ml-auto aspect-[4/5] w-[86%] rounded-[6px] sm:w-[66%] lg:w-[88%]" speed={6} eager />
           <motion.div className="relative z-10 -mt-[36%] sm:-mt-[26%] lg:-ml-[16%]" initial={{ opacity: 0, y: 40, rotate: 2 }} animate={{ opacity: 1, y: 0, rotate: 0 }} transition={{ duration: 0.9, ease: EASE, delay: 0.5 }}>
             <AnswerSlip />
           </motion.div>
@@ -282,9 +280,11 @@ function Hero() {
 
 // ---------- ticker of questions ----------
 function Ticker() {
+  const ref = useRef(null);
+  const live = useInView(ref);
   const row = (list, rev) => (
     <div className="hz-ticker-wrap hz-fade-x overflow-hidden">
-      <div className={`hz-ticker ${rev ? 'rev' : ''}`}>
+      <div className={`hz-ticker ${rev ? 'rev' : ''} ${live ? '' : 'paused'}`}>
         {[...list, ...list].map((q, i) => (
           <span key={i} className="flex shrink-0 items-center whitespace-nowrap pl-10 text-[26px] font-medium italic tracking-[-0.03em] sm:text-[34px]">
             “{q}”<span className="ml-10 not-italic opacity-90"><Engine name={ENGINES[i % 4]} size={34} /></span>
@@ -294,7 +294,7 @@ function Ticker() {
     </div>
   );
   return (
-    <div className="hz-dark py-10">
+    <div ref={ref} className="hz-dark py-10">
       <Label className="mb-6 px-5 text-center">Questions buyers put to AI assistants every day</Label>
       <div className="grid gap-4" aria-label="Example questions">{row(QUESTIONS.slice(0, 5))}{row(QUESTIONS.slice(5), true)}</div>
     </div>
@@ -531,7 +531,7 @@ function FourAnswers() {
               {FOUR.map((f, i) => {
                 const depth = (i - active + 4) % 4;
                 return (
-                  <motion.div key={f.engine} className="hz-slip hz-light absolute left-0 top-0 flex min-h-[250px] w-[88%] flex-col p-5 sm:min-h-[236px] sm:w-[80%] sm:p-7" style={{ zIndex: 4 - depth }}
+                  <motion.div key={f.engine} className="hz-slip hz-light absolute left-0 top-0 flex min-h-[250px] w-[88%] flex-col p-5 sm:min-h-[236px] sm:w-[80%] sm:p-7" style={{ zIndex: 4 - depth, willChange: 'transform' }}
                     animate={{ x: depth * 16, y: depth * 14, rotate: [-1.5, 1.2, -0.6, 2][depth], scale: 1 - depth * 0.02 }} transition={{ type: 'spring', stiffness: 220, damping: 28 }}>
                     <div className="flex items-center justify-between gap-3">
                       <span className="flex items-center gap-2"><Engine name={f.engine} size={24} /><Label color="var(--hz-ink)">{f.engine}</Label></span>
@@ -570,7 +570,7 @@ const SectionHead = ({ n, kicker, children }) => (
 );
 function WhyNow() {
   return (
-    <Wrap className="py-28 sm:py-36">
+    <Wrap className="hz-cv py-28 sm:py-36">
       <SectionHead n="03" kicker="Why now">AI answers are the new first page. <em>Most brands have never read theirs.</em></SectionHead>
       <div className="mt-16 grid gap-12 lg:grid-cols-3 lg:gap-0">
         <Stat value={0.66} decimals={2} label="Correlation between how often a brand is mentioned across the web and how often it appears in Google's AI answers. Backlinks matter far less." source="Ahrefs, 75,000 brands, 2025" />
@@ -610,6 +610,7 @@ const Row = ({ k, v, strong }) => <div className="flex items-end"><span>{k}</spa
 function FanOut() {
   const ref = useRef(null);
   const on = useInView(ref, { once: true, amount: 0.3 });
+  const live = useInView(ref);
   const ys = [40, 120, 200, 280];
   const path = y => `M210 160 C 300 160, 320 ${y}, 400 ${y}`;
   return (
@@ -637,7 +638,7 @@ function FanOut() {
           <g key={y}>
             <motion.path d={path(y)} fill="none" stroke="var(--hz-accent)" strokeOpacity=".45" strokeWidth="1.5" strokeDasharray="4 5"
               initial={{ pathLength: 0 }} animate={on ? { pathLength: 1 } : {}} transition={{ duration: 0.5, delay: 0.1 + k * 0.08 }} />
-            {on && <circle r="4" fill="var(--hz-accent)"><animateMotion dur={`${1.6 + k * 0.25}s`} repeatCount="indefinite" path={path(y)} /></circle>}
+            {on && live && <circle r="4" fill="var(--hz-accent)"><animateMotion dur={`${1.6 + k * 0.25}s`} repeatCount="indefinite" path={path(y)} /></circle>}
           </g>
         ))}
       </svg>
@@ -811,13 +812,16 @@ function Ledger() {
                 <div className="flex items-baseline gap-4">
                   <span className="hz-label w-8" style={{ color: 'var(--hz-accent)' }}>{String(i + 1).padStart(2, '0')}</span>
                   <span className="hz-display text-[42px] leading-none">{t}</span>
-                  {active === i && <motion.span layoutId="hz-step" className="ml-auto text-[18px]" style={{ color: 'var(--hz-accent)' }} aria-hidden>◂</motion.span>}
+                  <span className="ml-auto text-[18px] transition-opacity duration-300" style={{ color: 'var(--hz-accent)', opacity: active === i ? 1 : 0 }} aria-hidden>◂</span>
                 </div>
-                <motion.div initial={false} animate={{ height: active === i ? 'auto' : 0, opacity: active === i ? 1 : 0 }} transition={{ duration: 0.4, ease: EASE }} className="overflow-hidden">
-                  <p className="max-w-[420px] pl-12 pt-3 text-[16px] leading-relaxed" style={{ color: 'var(--hz-ink2)' }}>{d}</p>
-                </motion.div>
               </div>
             ))}
+            <div className="relative mt-6 h-[110px] pl-12">
+              {STEPS.map(([t, d], i) => (
+                <p key={t} className="absolute inset-x-0 top-0 max-w-[420px] pl-12 text-[16px] leading-relaxed transition-[opacity,transform] duration-500"
+                  style={{ color: 'var(--hz-ink2)', opacity: active === i ? 1 : 0, transform: `translateY(${active === i ? 0 : 8}px)` }} aria-hidden={active !== i}>{d}</p>
+              ))}
+            </div>
           </div>
         </div>
         <div className="lg:col-span-7">
@@ -840,7 +844,7 @@ function Different() {
     ['Done with you', 'A dashboard shows the gap. Our team closes it: the listings, the pages, the facts, the outreach. Then the numbers show whether it worked.'],
   ];
   return (
-    <div className="hz-dark">
+    <div className="hz-dark hz-cv">
       <Wrap className="py-28 sm:py-36">
         <div className="grid gap-6 lg:grid-cols-12 lg:gap-10">
           <div className="lg:col-span-3"><Kicker n="05">Not another dashboard</Kicker><LiveLogo size={56} className="mt-8 hidden lg:inline-block" /></div>
@@ -886,7 +890,7 @@ function WhoFor() {
   }, [hover, on]);
   const x = INDUSTRIES[i];
   return (
-    <Wrap id="who" className="py-28 sm:py-36">
+    <Wrap id="who" className="hz-cv py-28 sm:py-36">
       <div ref={ref} className="grid gap-14 lg:grid-cols-12" onMouseLeave={() => setHover(false)}>
         <div className="lg:col-span-7">
           <Reveal>
@@ -899,9 +903,7 @@ function WhoFor() {
                 <span className="hz-display text-[34px] leading-none transition-colors sm:text-[42px]" style={{ color: i === k ? 'var(--hz-accent)' : 'var(--hz-muted)' }}>{String(k + 1).padStart(2, '0')}</span>
                 <span>
                   <span className="hz-display block text-[26px] leading-tight transition-opacity sm:text-[32px]" style={{ opacity: i === k ? 1 : 0.5 }}>{r.t}</span>
-                  <motion.span initial={false} animate={{ height: i === k ? 'auto' : 0, opacity: i === k ? 1 : 0 }} transition={{ duration: 0.4, ease: EASE }} className="block overflow-hidden">
-                    <span className="block max-w-[520px] pt-2 text-[16px] leading-relaxed" style={{ color: 'var(--hz-ink2)' }}>{r.d}</span>
-                  </motion.span>
+                  <span className="block max-w-[520px] pt-2 text-[16px] leading-relaxed transition-opacity duration-300" style={{ color: 'var(--hz-ink2)', opacity: i === k ? 1 : 0.55 }}>{r.d}</span>
                 </span>
               </button>
             ))}
@@ -940,7 +942,7 @@ function Faq() {
     ['Is it honest?', 'Yes. No paid or fake reviews, no anonymous posts, no promises of rankings. Every number comes with its evidence, and every action we suggest is one you could show to a regulator.'],
   ];
   return (
-    <div className="border-t hz-rule" style={{ background: 'var(--hz-band)' }}>
+    <div className="hz-cv border-t hz-rule" style={{ background: 'var(--hz-band)' }}>
       <Wrap id="faq" className="py-28 sm:py-36">
         <div className="grid gap-12 lg:grid-cols-12">
           <Reveal className="lg:col-span-4">
@@ -1004,7 +1006,7 @@ function Contact() {
     catch (err) { setState({ busy: false, done: false, error: err.message }); }
   };
   return (
-    <Wrap id="contact" className="py-28 sm:py-36">
+    <Wrap id="contact" className="hz-cv py-28 sm:py-36">
       <div className="grid gap-14 lg:grid-cols-12">
         <Reveal className="lg:col-span-5">
           <Kicker n="08">Prefer to talk first?</Kicker>
@@ -1052,7 +1054,7 @@ function Contact() {
 // ---------- footer ----------
 function Footer({ signedIn }) {
   return (
-    <footer className="hz-dark">
+    <footer className="hz-dark hz-cv">
       <div className="mx-auto max-w-[1240px] px-5 pt-14 sm:px-8">
         <div className="grid gap-10 sm:grid-cols-3">
           <p className="hz-display text-[22px] leading-tight"><span className="mb-4 block"><LiveLogo size={44} /></span>See what AI says.<br /><em>Change it. Prove it.</em></p>

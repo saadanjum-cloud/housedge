@@ -13,6 +13,9 @@ if (PREVIEW) {
   }, true);
 }
 import App from './App.jsx';
+
+// A page restored from the back/forward cache is a snapshot; reload so the sign-in check runs again.
+window.addEventListener('pageshow', e => { if (e.persisted) window.location.reload(); });
 import { ToastProvider } from './ui.jsx';
 import '@fontsource-variable/figtree';
 import './styles.css';

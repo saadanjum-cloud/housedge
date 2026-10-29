@@ -1,0 +1,14 @@
+# Public pages may be indexed; the app itself is private.
+User-agent: *
+Allow: /$
+Allow: /website
+Allow: /onboarding
+Allow: /privacy
+Allow: /terms
+Allow: /legal
+Allow: /assets/
+Allow: /photos/
+Allow: /logos/
+Allow: /favicon.svg
+Allow: /theme.js
+Disallow: /
