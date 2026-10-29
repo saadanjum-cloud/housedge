@@ -1,0 +1,12 @@
+# Secrets: never commit (keys, passwords, tokens). Use .env.example / web/.env.example as templates.
+.env
+.env.local
+web/.env.local
+*.pem
+*.key
+# Generated or local-only
+node_modules/
+dist/
+data/
+*.log
+.DS_Store

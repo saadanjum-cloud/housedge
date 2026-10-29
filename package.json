@@ -1,0 +1,34 @@
+{
+  "name": "housedge",
+  "version": "1.1.0",
+  "description": "Tracks how AI assistants talk about brands (React on Vercel, Supabase backend)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:rls": "node supabase/tests/run.mjs supabase/tests/rls.sql",
+    "test:api": "node supabase/tests/api.mjs",
+    "test:auth": "node supabase/tests/auth-flow.mjs"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@fontsource-variable/figtree": "^5.3.0",
+    "@supabase/supabase-js": "^2.109.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.6.1",
+    "framer-motion": "^11.18.2",
+    "lucide-react": "^1.56.0",
+    "postcss": "^8.5.30",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.18.4",
+    "recharts": "^2.15.4",
+    "tailwindcss": "^3.4.19",
+    "vite": "^6.4.4"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  }
+}
