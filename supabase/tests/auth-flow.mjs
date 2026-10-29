@@ -41,7 +41,8 @@ if (setupOpen) {
   });
 } else {
   step('setup stays closed once an admin exists (even with a guessed code)', async () => {
-    assert.equal((await fn('join', { action: 'setup', setupCode: 'wrong-code-wrong-code', email: adminEmail, password: strong, fullName: 'X' })).status, 409);
+    // 409 = setup already done; 503 = no setup code on the server at all (setup switched off). Both keep it closed.
+    assert.ok([409, 503].includes((await fn('join', { action: 'setup', setupCode: 'wrong-code-wrong-code', email: adminEmail, password: strong, fullName: 'X' })).status));
     await makeTestAdmin({ url, mgmt, ref, email: adminEmail, password: strong, sql });
   });
 }

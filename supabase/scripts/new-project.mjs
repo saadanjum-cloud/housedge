@@ -10,7 +10,8 @@
 // Usage (secrets come from the environment, never from the command line or this file):
 //   NEW_ACCESS_TOKEN=sbp_...        personal access token of the account that owns the NEW project
 //   NEW_REF=abcdefghijklmnop       the new project's reference id (Project settings → General)
-//   NEW_DB_PASSWORD=...            the new project's database password
+//   [NEW_DB_PASSWORD=...]          the new project's database password (optional: without it, migrations run through the
+//                                  Management API and the functions use the database address Supabase gives them)
 //   ANTHROPIC_API_KEY=sk-ant-...   Claude key for Run now, Ask Housedge, drafts…
 //   APP_URL=https://your-app.vercel.app
 //   [SETUP_CODE=...]               only needed if you will NOT copy data (creates the first admin on /setup)
@@ -20,7 +21,7 @@ import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 
 const env = process.env;
-for (const k of ['NEW_ACCESS_TOKEN', 'NEW_REF', 'NEW_DB_PASSWORD', 'ANTHROPIC_API_KEY', 'APP_URL']) if (!env[k]) { console.error(`Missing ${k}. See the comment at the top of this file.`); process.exit(2); }
+for (const k of ['NEW_ACCESS_TOKEN', 'NEW_REF', 'ANTHROPIC_API_KEY', 'APP_URL']) if (!env[k]) { console.error(`Missing ${k}. See the comment at the top of this file.`); process.exit(2); }
 const ref = env.NEW_REF, token = env.NEW_ACCESS_TOKEN, appUrl = env.APP_URL.replace(/\/$/, '');
 const OLD_REF = 'fnvfhxhccuntvewpwfnc'; // the project this repo was built on, replaced in vercel.json and web/.env.example
 const hide = s => [env.NEW_DB_PASSWORD, env.ANTHROPIC_API_KEY, token].filter(Boolean).reduce((x, v) => x.split(v).join('[hidden]'), String(s));
@@ -44,13 +45,27 @@ if ((await sql("select count(*)::int n from information_schema.tables where tabl
 }
 
 step('Database migrations');
-const poolers = await mgmt('GET', `/projects/${ref}/config/database/pooler`);
-const pooler = (Array.isArray(poolers) ? poolers : [poolers]).find(p => p.pool_mode === 'transaction') || poolers[0];
-const host = pooler.db_host, user = pooler.db_user || `postgres.${ref}`;
-const enc = encodeURIComponent(env.NEW_DB_PASSWORD);
-const sessionUrl = `postgresql://${user}:${enc}@${host}:5432/postgres`;   // migrations, data copy
-const transactionUrl = `postgresql://${user}:${enc}@${host}:6543/postgres`; // the api function's pool
-console.log(hide(cli(['db', 'push', '--db-url', sessionUrl, '--yes'])).split('\n').filter(l => /Applying|Finished|up to date/i.test(l)).join('\n'));
+let transactionUrl = null;
+if (env.NEW_DB_PASSWORD) {
+  const poolers = await mgmt('GET', `/projects/${ref}/config/database/pooler`);
+  const pooler = (Array.isArray(poolers) ? poolers : [poolers]).find(p => p.pool_mode === 'transaction') || poolers[0];
+  const host = pooler.db_host, user = pooler.db_user || `postgres.${ref}`;
+  const enc = encodeURIComponent(env.NEW_DB_PASSWORD);
+  transactionUrl = `postgresql://${user}:${enc}@${host}:6543/postgres`; // the api function's pool
+  console.log(hide(cli(['db', 'push', '--db-url', `postgresql://${user}:${enc}@${host}:5432/postgres`, '--yes'])).split('\n').filter(l => /Applying|Finished|up to date/i.test(l)).join('\n'));
+} else {
+  // Same result as `supabase db push`: each migration once, in order, recorded in supabase_migrations.
+  await sql(`create schema if not exists supabase_migrations;
+    create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text)`);
+  const done = new Set((await sql('select version from supabase_migrations.schema_migrations')).map(r => r.version));
+  for (const file of fs.readdirSync('supabase/migrations').filter(f => /^\d+_.+\.sql$/.test(f)).sort()) {
+    const [version, ...rest] = file.replace(/\.sql$/, '').split('_');
+    if (done.has(version)) continue;
+    const body = fs.readFileSync(`supabase/migrations/${file}`, 'utf8');
+    await sql(`begin;\n${body}\ninsert into supabase_migrations.schema_migrations (version, name, statements) values (${quote(version)}, ${quote(rest.join('_'))}, array[${quote(body)}]);\ncommit;`);
+    console.log(`Applied ${file}`);
+  }
+}
 
 step('Server secrets');
 const cronSecret = randomBytes(32).toString('hex');
@@ -58,7 +73,7 @@ const secrets = [
   { name: 'ANTHROPIC_API_KEY', value: env.ANTHROPIC_API_KEY },
   { name: 'APP_URL', value: appUrl },
   { name: 'APP_ORIGINS', value: `${appUrl},http://localhost:5173` },
-  { name: 'DB_POOL_URL', value: transactionUrl },
+  ...(transactionUrl ? [{ name: 'DB_POOL_URL', value: transactionUrl }] : []),
   { name: 'CRON_SECRET', value: cronSecret },
   ...(env.SETUP_CODE ? [{ name: 'SETUP_CODE', value: env.SETUP_CODE }] : []),
   ...['OPENAI_API_KEY', 'GEMINI_API_KEY', 'PERPLEXITY_API_KEY'].filter(k => env[k]).map(k => ({ name: k, value: env[k] })),
