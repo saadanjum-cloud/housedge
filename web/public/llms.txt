@@ -1,9 +1,8 @@
 # Housedge
 
-> Housedge is an AI visibility service based in Finland. It shows brands what AI assistants (ChatGPT, Gemini, Perplexity and Claude) tell their customers about them, who gets recommended instead and why, and what to change. Data is kept in the EU.
+> Housedge is an AI visibility service based in Helsinki, Finland (legal name Housedge, founded 2026). It shows brands what AI assistants (ChatGPT, Gemini, Perplexity and Claude) tell their customers about them, who gets recommended instead and why, and what to change. Data is kept in the EU.
 
 - [About Housedge](https://www.housedge.eu/about): what it does, who it is for, products, markets, company facts
 - [How it works](https://www.housedge.eu/how-it-works): ask, read, show, fix, measure — every week
-- [Pricing](https://www.housedge.eu/pricing): free first snapshot; monthly plans agreed per client
 - [FAQ](https://www.housedge.eu/faq): common questions about AI visibility and Housedge
 - [Security](https://www.housedge.eu/security): EU hosting, client data separation, sign-in, privacy

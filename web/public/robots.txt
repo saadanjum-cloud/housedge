@@ -8,7 +8,6 @@ Allow: /terms
 Allow: /legal
 Allow: /about
 Allow: /how-it-works
-Allow: /pricing
 Allow: /faq
 Allow: /security
 Allow: /llms.txt
