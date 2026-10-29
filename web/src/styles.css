@@ -157,37 +157,63 @@ mark.brand { background: transparent; border-bottom: 2px solid; padding: 0 2px; 
   .print-break { break-before: page; }
 }
 
-/* ---- Public website (Home.jsx): its own look, independent of the app theme ---- */
-.hz { --hz-bg: #0a0b0f; --hz-bg2: #0f1117; --hz-ink: #f4f5f7; --hz-ink2: #b4b9c6; --hz-muted: #7c8291; --hz-line: rgba(255,255,255,0.09);
-  --hz-card: rgba(255,255,255,0.035); --hz-accent: #c9f54f; --hz-accent-ink: #0a0b0f; --hz-cyan: #6fe0ff; --hz-bad: #ff6b6b;
-  background: var(--hz-bg); color: var(--hz-ink); color-scheme: dark; }
-.hz ::selection { background: var(--hz-accent); color: var(--hz-accent-ink); }
-.hz .hz-card { background: var(--hz-card); border: 1px solid var(--hz-line); border-radius: 20px; }
-.hz .hz-btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; border-radius: 999px; padding: .8rem 1.4rem; font-size: 15px; font-weight: 600; transition: transform .2s, background .2s, border-color .2s; white-space: nowrap; }
-.hz .hz-btn:hover { transform: translateY(-1px); } .hz .hz-btn:active { transform: translateY(0) scale(.98); }
-.hz .hz-primary { background: var(--hz-accent); color: var(--hz-accent-ink); box-shadow: 0 0 0 1px rgba(201,245,79,.4), 0 10px 40px -10px rgba(201,245,79,.55); }
-.hz .hz-primary:hover { background: #d8ff6a; }
-.hz .hz-ghost { background: rgba(255,255,255,.06); color: var(--hz-ink); border: 1px solid var(--hz-line); } .hz .hz-ghost:hover { background: rgba(255,255,255,.1); }
-.hz .hz-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--hz-accent); }
-.hz .hz-grad { background: linear-gradient(92deg, #fff 0%, #d9dde6 45%, var(--hz-accent) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.hz .hz-input { width: 100%; border-radius: 12px; background: rgba(255,255,255,.05); border: 1px solid var(--hz-line); padding: .7rem .9rem; font-size: 14px; color: var(--hz-ink); }
-.hz .hz-input:focus { outline: none; border-color: var(--hz-accent); box-shadow: 0 0 0 4px rgba(201,245,79,.12); }
+/* ---- Public website (Home.jsx): the Evergreen brand colours ----
+   Light evergreen pages with dark forest bands (.hz-dark), mint highlighter, Figtree. AI answers appear as white
+   "printed" slips that Housedge marks up (highlighted reasons, redacted competitor names). */
+.hz { --hz-bg: #f5f7f3; --hz-band: #e8eee7; --hz-surface: #ffffff; --hz-ink: #0e1f18; --hz-ink2: #3a4a42; --hz-muted: #5e6a63;
+  --hz-rule: #d6dfd7; --hz-accent: #0f7a4c; --hz-hl: #8ef0be; --hz-bad: #c9302c; --hz-good: #0f7a4c; --hz-warn: #9a6400;
+  --hz-btn: #0e2b22; --hz-btn-ink: #ffffff; --hz-btn-hover: #0f7a4c;
+  background: var(--hz-bg); color: var(--hz-ink); color-scheme: light; font-family: 'Figtree Variable', system-ui, sans-serif; position: relative; }
+.hz .hz-dark { --hz-bg: #0e2b22; --hz-band: #0b231b; --hz-surface: #143a2e; --hz-ink: #eef5f0; --hz-ink2: #bcd0c5; --hz-muted: #8fa89c;
+  --hz-rule: rgba(238,245,240,.14); --hz-accent: #8ef0be; --hz-hl: rgba(142,240,190,.3); --hz-bad: #ff8a7e; --hz-good: #8ef0be; --hz-warn: #f4c26b;
+  --hz-btn: #8ef0be; --hz-btn-ink: #0e2b22; --hz-btn-hover: #b2f6d3; background: var(--hz-bg); color: var(--hz-ink); color-scheme: dark; }
+.hz .hz-light { --hz-ink: #0e1f18; --hz-ink2: #3a4a42; --hz-muted: #5e6a63; --hz-rule: #dfe6df; --hz-accent: #0f7a4c; --hz-hl: #8ef0be;
+  --hz-bad: #c9302c; --hz-good: #0f7a4c; --hz-warn: #9a6400; background: #ffffff; color: var(--hz-ink); color-scheme: light; }
+.hz ::selection { background: #8ef0be; color: #0e2b22; }
+.hz .hz-display { font-weight: 600; letter-spacing: -0.045em; }
+.hz .hz-display em, .hz em.hz-display { font-style: italic; font-weight: 500; color: var(--hz-accent); }
+.hz .hz-label { font-size: 11.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+.hz .hz-rule { border-color: var(--hz-rule); }
+.hz .hz-btn { display: inline-flex; align-items: center; justify-content: center; gap: .6rem; border-radius: 999px; padding: .95rem 1.5rem; font-size: 15px; font-weight: 600;
+  transition: background .2s, color .2s, transform .2s; white-space: nowrap; }
+.hz .hz-btn:active { transform: translateY(1px); }
+.hz .hz-primary { background: var(--hz-btn); color: var(--hz-btn-ink); } .hz .hz-primary:hover { background: var(--hz-btn-hover); }
+.hz .hz-btn .hz-arrow { transition: transform .25s; } .hz .hz-btn:hover .hz-arrow { transform: translateX(4px); }
+.hz .hz-link { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; } .hz .hz-link:hover { color: var(--hz-accent); }
+/* A slip: the AI answer, printed and marked up. */
+.hz .hz-slip { border-radius: 8px; box-shadow: 0 0 0 1px rgba(14,31,24,.08), 0 30px 60px -30px rgba(14,43,34,.35); }
+.hz .hz-panel { background: var(--hz-surface); border: 1px solid var(--hz-rule); border-radius: 12px; }
+/* Redacted brand names: solid bars, like a censored document. */
+.hz .hz-redact { display: inline-block; height: .82em; background: var(--hz-ink); vertical-align: -0.06em; border-radius: 2px; }
+/* Highlighter: sweeps left to right when the text comes into view (class "on"). */
+.hz .hz-mark { background: linear-gradient(transparent 46%, var(--hz-hl) 46%, var(--hz-hl) 94%, transparent 94%) no-repeat 0 0 / 0% 100%;
+  transition: background-size 1s cubic-bezier(.6,.1,.2,1) .2s; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.hz .hz-mark.on { background-size: 100% 100%; }
+.hz .hz-input { width: 100%; background: transparent; border: 0; border-bottom: 1px solid var(--hz-rule); border-radius: 0; padding: .55rem 0; font-size: 16px; color: var(--hz-ink); }
+.hz .hz-input:focus { outline: none; border-bottom: 2px solid var(--hz-accent); padding-bottom: calc(.55rem - 1px); }
 .hz .hz-input::placeholder { color: var(--hz-muted); }
-.hz select.hz-input option { color: #111; }
-.hz .hz-orb { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .55; pointer-events: none; animation: hz-float 18s ease-in-out infinite alternate; }
-@keyframes hz-float { from { transform: translate(0,0) scale(1); } to { transform: translate(5vw,4vh) scale(1.08); } }
-.hz .hz-grid { background-image: linear-gradient(var(--hz-line) 1px, transparent 1px), linear-gradient(90deg, var(--hz-line) 1px, transparent 1px); background-size: 48px 48px;
-  -webkit-mask-image: radial-gradient(ellipse at 50% 0%, #000 20%, transparent 70%); mask-image: radial-gradient(ellipse at 50% 0%, #000 20%, transparent 70%); }
-.hz .hz-marquee { display: flex; gap: 12px; width: max-content; animation: hz-marquee 60s linear infinite; }
-.hz .hz-marquee:hover { animation-play-state: paused; }
-@keyframes hz-marquee { to { transform: translateX(-50%); } }
-.hz .hz-caret { display: inline-block; width: 2px; height: 1.1em; background: var(--hz-accent); margin-left: 2px; vertical-align: -0.15em; animation: hz-blink 1s steps(2) infinite; }
+/* Photos: black and white with grain (baked into the files), no faces. */
+.hz .hz-photo { position: relative; overflow: hidden; background: #0e2b22; }
+.hz .hz-photo img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) contrast(1.05); }
+/* An assistant's logo, unaltered, on a white disc. */
+.hz .hz-engine { display: inline-grid; place-items: center; flex: none; border-radius: 999px; background: #fff; box-shadow: 0 0 0 1px rgba(14,31,24,.12); }
+.hz .hz-ticker { display: flex; width: max-content; animation: hz-ticker 70s linear infinite; }
+.hz .hz-ticker.rev { animation-direction: reverse; }
+.hz .hz-ticker-wrap:hover .hz-ticker { animation-play-state: paused; }
+.hz .hz-fade-x { mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+@keyframes hz-ticker { to { transform: translateX(-50%); } }
+.hz .hz-caret { display: inline-block; width: .45em; height: 1em; background: var(--hz-accent); margin-left: 2px; vertical-align: -0.12em; animation: hz-blink 1s steps(2) infinite; }
 @keyframes hz-blink { 50% { opacity: 0; } }
-.hz .hz-dots span { display: inline-block; width: 5px; height: 5px; margin-right: 3px; border-radius: 50%; background: var(--hz-muted); animation: hz-bounce 1.2s infinite; }
+.hz button:focus:not(:focus-visible), .hz a:focus:not(:focus-visible) { outline: none; }
+.hz button:focus-visible, .hz a:focus-visible { outline: 2px solid var(--hz-accent); outline-offset: 3px; border-radius: 4px; }
+.hz .hz-shimmer { background: linear-gradient(90deg, #9b9b9b 0%, #0d0d0d 40%, #9b9b9b 80%) 0 0 / 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: hz-shimmer 1.4s linear infinite; }
+@keyframes hz-shimmer { to { background-position: -200% 0; } }
+.hz .hz-dots span { display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: currentColor; animation: hz-bounce 1.2s infinite; }
 .hz .hz-dots span:nth-child(2) { animation-delay: .15s; } .hz .hz-dots span:nth-child(3) { animation-delay: .3s; }
-@keyframes hz-bounce { 0%, 80%, 100% { transform: translateY(0); opacity: .5; } 40% { transform: translateY(-4px); opacity: 1; } }
-.hz .hz-redact { display: inline-block; height: .95em; border-radius: 4px; background: linear-gradient(90deg, rgba(255,255,255,.18), rgba(255,255,255,.08)); vertical-align: -0.15em; filter: blur(2.5px); }
-.hz .hz-lock { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: linear-gradient(180deg, rgba(10,11,15,.1), rgba(10,11,15,.85)); }
-.hz .hz-ring { box-shadow: inset 0 0 0 1px var(--hz-line), 0 30px 80px -30px rgba(0,0,0,.8); }
-.hz .hz-tilt { transition: transform .35s cubic-bezier(.2,.7,.2,1), border-color .35s; } .hz .hz-tilt:hover { transform: translateY(-4px); border-color: rgba(201,245,79,.35); }
-@media (prefers-reduced-motion: reduce) { .hz .hz-marquee, .hz .hz-orb, .hz .hz-caret, .hz .hz-dots span { animation: none !important; } }
+@keyframes hz-bounce { 0%, 80%, 100% { transform: translateY(0); opacity: .4; } 40% { transform: translateY(-4px); opacity: 1; } }
+/* Receipt with torn zig-zag edges. */
+.hz .hz-receipt { font-variant-numeric: tabular-nums; filter: drop-shadow(0 18px 24px rgba(14,43,34,.18));
+  -webkit-mask: conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / 14px 51% repeat-x, conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / 14px 51% repeat-x;
+  mask: conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / 14px 51% repeat-x, conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / 14px 51% repeat-x; }
+.hz .hz-leader { flex: 1; border-bottom: 1px dotted var(--hz-muted); margin: 0 .5em .3em; }
+@media (prefers-reduced-motion: reduce) { .hz .hz-ticker, .hz .hz-caret, .hz .hz-dots span, .hz .hz-shimmer { animation: none !important; } .hz .hz-mark { transition: none; } }
