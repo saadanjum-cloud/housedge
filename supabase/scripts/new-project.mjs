@@ -96,7 +96,7 @@ console.log(`Public sign-up off; passwords 10+ with a-z, A-Z, 0-9; redirects all
 
 step('Server functions');
 console.log(cli(['functions', 'deploy', 'api', 'join', 'team', '--project-ref', ref, '--use-api', '--no-verify-jwt']).split('\n').filter(l => /Deployed/i.test(l)).join('\n') || 'deployed');
-const health = await fetch(`https://${ref}.supabase.co/functions/v1/api/legal`, { headers: { 'x-region': 'eu-central-1' } });
+const health = await fetch(`https://${ref}.supabase.co/functions/v1/api/legal`, { headers: { 'x-region': 'eu-west-1' } });
 console.log(`api answers: HTTP ${health.status}`);
 
 step('Front-end settings');

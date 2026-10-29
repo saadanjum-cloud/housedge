@@ -20,7 +20,7 @@ const fn = async (name, body, token) => (await fetch(`${url}/functions/v1/${name
 const signIn = async email => (await (await fetch(`${url}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { apikey: key, 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: pw }) })).json()).access_token;
 const api = async (token, path, { method = 'GET', body } = {}) => {
   // Only reads are retried; a write is sent once so a retry cannot apply it twice.
-  const send = () => fetch(`${url}/functions/v1/api${path}`, { method, headers: { apikey: key, 'x-region': 'eu-central-1', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(120000) });
+  const send = () => fetch(`${url}/functions/v1/api${path}`, { method, headers: { apikey: key, 'x-region': 'eu-west-1', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(120000) });
   const r = method === 'GET' ? await retry(send) : await send();
   const type = r.headers.get('content-type') || '';
   return { status: r.status, body: type.includes('json') ? await r.json() : await r.text() };
@@ -177,7 +177,7 @@ step('admin sees everything and makes a report the client can read', async () =>
   assert.match((await api(T.admin, '/team/invite', { method: 'POST', body: { email: `mate-${run}@housedge.test` } })).body.token, /^[0-9a-f]{64}$/);
 });
 step('CSV export; the data API key opens one client only; spending locks', async () => {
-  const raw = await fetch(`${url}/functions/v1/api/projects/${T.pa}/export/answers?days=30`, { headers: { apikey: key, Authorization: `Bearer ${T.a}`, 'x-region': 'eu-central-1' } });
+  const raw = await fetch(`${url}/functions/v1/api/projects/${T.pa}/export/answers?days=30`, { headers: { apikey: key, Authorization: `Bearer ${T.a}`, 'x-region': 'eu-west-1' } });
   const bytes = new Uint8Array(await raw.arrayBuffer());
   assert.equal(raw.status, 200);
   assert.deepEqual([...bytes.slice(0, 3)], [0xef, 0xbb, 0xbf], 'starts with the marker that makes Excel read accents correctly');

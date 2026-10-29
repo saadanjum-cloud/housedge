@@ -6,6 +6,14 @@ Allow: /onboarding
 Allow: /privacy
 Allow: /terms
 Allow: /legal
+Allow: /about
+Allow: /how-it-works
+Allow: /pricing
+Allow: /faq
+Allow: /security
+Allow: /llms.txt
+Allow: /site.css
+Allow: /fonts/
 Allow: /assets/
 Allow: /photos/
 Allow: /logos/

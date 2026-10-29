@@ -1,0 +1,44 @@
+/* Information pages (about, how it works, pricing, FAQ, security): plain HTML that people, search engines and
+   AI assistants can read without running any code. Same look as the home page: Evergreen colours, Figtree. */
+@font-face { font-family: 'Figtree'; src: url('/fonts/figtree.woff2') format('woff2'); font-weight: 300 900; font-display: swap; }
+:root { --bg: #f5f7f3; --band: #e8eee7; --ink: #0e1f18; --ink2: #3a4a42; --muted: #5e6a63; --rule: #d6dfd7; --accent: #0f7a4c; --mint: #8ef0be; --forest: #0e2b22; }
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.65 'Figtree', system-ui, sans-serif; }
+a { color: inherit; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+a:hover { color: var(--accent); }
+.wrap { max-width: 860px; margin: 0 auto; padding: 0 20px; }
+header.top { border-bottom: 1px solid var(--rule); }
+header.top .wrap { max-width: 1240px; display: flex; align-items: center; justify-content: space-between; height: 64px; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 21px; letter-spacing: -0.03em; text-decoration: none; }
+.brand img { width: 30px; height: 30px; }
+nav.site { display: flex; gap: 22px; flex-wrap: wrap; }
+nav.site a { font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; text-decoration: none; color: var(--ink2); }
+nav.site a[aria-current] { color: var(--accent); }
+.btn { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; background: var(--forest); color: #fff; padding: 12px 22px; font-weight: 600; font-size: 15px; text-decoration: none; white-space: nowrap; }
+.btn:hover { background: var(--accent); color: #fff; }
+main { padding: 56px 0 80px; }
+.kicker { font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+h1 { font-size: clamp(38px, 6vw, 60px); line-height: 1.02; letter-spacing: -0.045em; font-weight: 600; margin: 12px 0 20px; }
+h1 em, h2 em { font-weight: 500; color: var(--accent); }
+h2 { font-size: 28px; line-height: 1.15; letter-spacing: -0.035em; font-weight: 600; margin: 52px 0 12px; }
+h3 { font-size: 19px; letter-spacing: -0.02em; margin: 28px 0 6px; }
+p, li { color: var(--ink2); }
+.lead { font-size: 20px; line-height: 1.55; color: var(--ink2); }
+ul, ol { padding-left: 22px; }
+li { margin: 6px 0; }
+dl.facts { display: grid; grid-template-columns: 210px 1fr; gap: 10px 24px; margin: 18px 0; border-top: 1px solid var(--rule); padding-top: 18px; }
+dl.facts dt { color: var(--muted); font-size: 15px; }
+dl.facts dd { margin: 0; }
+.card { background: #fff; border: 1px solid var(--rule); border-radius: 10px; padding: 22px 24px; margin: 16px 0; }
+.card h3 { margin-top: 0; }
+.cta { margin-top: 56px; padding: 32px; border-radius: 12px; background: var(--forest); color: #eef5f0; }
+.cta p { color: #bcd0c5; }
+.cta .btn { background: var(--mint); color: var(--forest); }
+details { border-bottom: 1px solid var(--rule); padding: 14px 0; }
+summary { cursor: pointer; font-weight: 600; font-size: 19px; letter-spacing: -0.02em; }
+details p { margin: 10px 0 0; }
+footer.bottom { border-top: 1px solid var(--rule); padding: 28px 0 40px; font-size: 14px; color: var(--muted); }
+footer.bottom .wrap { max-width: 1240px; display: flex; flex-wrap: wrap; gap: 14px 24px; justify-content: space-between; }
+footer.bottom nav { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+@media (max-width: 720px) { nav.site { display: none; } dl.facts { grid-template-columns: 1fr; gap: 2px; } dl.facts dd { margin-bottom: 12px; } main { padding-top: 36px; } }

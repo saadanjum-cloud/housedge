@@ -2,8 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useState, useSyncExt
 import { useSearchParams } from 'react-router-dom';
 // The sign-in library is loaded only when it is needed, so first-time visitors do not download it.
 const loadSupabase = () => import('./supabase.js').then(m => m.supabase);
-// Functions run next to the database (Frankfurt is the nearest function region to Stockholm).
-export const REGION = 'eu-central-1';
+// Functions run next to the database (both in Ireland, eu-west-1).
+export const REGION = 'eu-west-1';
 // True when this browser holds a saved sign-in; without one the visitor cannot be signed in.
 export const hasSavedSession = () => { try { return Object.keys(localStorage).some(k => k.startsWith('sb-') && k.endsWith('-auth-token')); } catch { return true; } };
 

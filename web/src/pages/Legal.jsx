@@ -86,7 +86,7 @@ export function Privacy() {
       <p>We use these service providers ("processors"). They may only use the data to provide their service to us.</p>
       <ul>
         <li><strong>Vercel Inc.</strong> — hosting of the app (the web pages you load).</li>
-        <li><strong>Supabase Inc.</strong> — the database, sign-in and server functions. Servers are located in the EU: <strong>Stockholm, Sweden</strong>.</li>
+        <li><strong>Supabase Inc.</strong> — the database, sign-in and server functions. Servers are located in the EU: <strong>Dublin, Ireland</strong>.</li>
         <li><strong>OpenAI, Google, Perplexity and Anthropic</strong> — only when AI engines are switched on. They receive the tracked questions (about brands) and return answers. If you use the fact check, Anthropic also receives the stored answers that mention the client together with the facts you entered, to compare them. If you use draft pages or outreach email drafts, Anthropic receives the brand profile you entered (and, for emails, the website name and contact name), to write the draft. If you use the "Ask Housedge" assistant, Anthropic receives your question and the data of the open client that is needed to answer it (numbers, collected AI answers, sources, actions and outreach status). Conversations are not stored by Housedge. Account details are never sent to them.</li>
       </ul>
       <p>Where data is processed outside the EU/EEA, the transfer is protected by the European Commission's Standard Contractual Clauses and/or the EU–US Data Privacy Framework, as offered by the provider.</p>
@@ -191,7 +191,7 @@ export function LegalNotice() {
     ['Address', <F key="a" v={c.address} label="Street address, postcode and city" />], ['Country', <F key="c" v={c.country} label="Country" />],
     ['Email', <F key="e" v={c.email} label="Contact email" />], ['Phone', c.phone || '—'], ['Website', c.website || '—'],
     ['Responsible person', c.representative || '—'],
-    ['Hosting', 'App: Vercel Inc. Database, sign-in and server functions: Supabase Inc. (EU, Stockholm, Sweden)'],
+    ['Hosting', 'App: Vercel Inc. Database, sign-in and server functions: Supabase Inc. (EU, Dublin, Ireland)'],
   ];
   return (
     <Page title="Legal notice" d={d}>

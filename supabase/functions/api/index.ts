@@ -220,7 +220,7 @@ R('GET', '/legal', async () => {
   const info = await asService(() => get('SELECT company FROM site_info WHERE id = 1'));
   const updated = await asService(() => siteSetting('legal_updated', ''));
   return { company: { ...Object.fromEntries(COMPANY_FIELDS.map(k => [k, ''])), country: 'Finland', ...(info?.company || {}) },
-    updated: [updated || '', '2026-10-26'].sort().pop(), hostingRegion: 'European Union (Stockholm, Sweden)' };
+    updated: [updated || '', '2026-10-26'].sort().pop(), hostingRegion: 'European Union (Dublin, Ireland)' };
 }, true);
 
 R('POST', '/enquiries/new', async c => {
@@ -777,7 +777,7 @@ async function settingsView(isAdmin: boolean) {
   return {
     mode: 'live', monthly_cap: Number((await siteSetting('monthly_cap', 0)) || 0), trial_daily_cap: Number((await siteSetting('trial_daily_cap', 0)) || 0), run_hour_utc: Number((await siteSetting('run_hour_utc', 5)) ?? 5),
     company: { ...Object.fromEntries(COMPANY_FIELDS.map(k => [k, ''])), country: 'Finland', ...(info?.company || {}) },
-    hosting_region: 'European Union (Stockholm, Sweden)', engines, spend: month.s, spendByEngine: byEngine,
+    hosting_region: 'European Union (Dublin, Ireland)', engines, spend: month.s, spendByEngine: byEngine,
   };
 }
 const setSetting = (k: string, val: unknown) => run('INSERT INTO settings (key, value) VALUES (?, ?::jsonb) ON CONFLICT (key) DO UPDATE SET value = excluded.value', k, JSON.stringify(val));
