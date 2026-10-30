@@ -99,7 +99,7 @@ R('POST', '/orgs/:id/prefill', async c => {
   if (!key) throw fail('Reading websites is not connected yet. Please fill in the steps yourself.', 503);
   const recent = await asService(() => get("SELECT COUNT(*) n FROM ai_spend WHERE org_id = ? AND kind = 'prefill' AND created_at > now() - interval '1 day'", org.id));
   if (recent.n >= 5) throw fail('The website was read 5 times today. Please fill in the rest yourself, or try again tomorrow.', 429);
-  await assertCanSpend(org.id, 0.01);
+  await assertCanSpend(org.id, 0.06); // site read + up to 4 web searches
   const r = await prefillFromWebsite(v.str(c.body.website, { max: 200, label: 'Website', required: true }), key);
   await asService(() => run("INSERT INTO ai_spend (org_id, kind, model, cost, in_tokens, out_tokens) VALUES (?, 'prefill', 'claude-haiku-5-5', ?, ?, ?)",
     org.id, r.cost, r.usage?.input_tokens || 0, r.usage?.output_tokens || 0));
