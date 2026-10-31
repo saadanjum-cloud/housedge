@@ -11,6 +11,7 @@ Allow: /how-it-works
 Allow: /faq
 Allow: /security
 Allow: /llms.txt
+Allow: /sitemap.xml
 Allow: /site.css
 Allow: /fonts/
 Allow: /assets/
@@ -19,3 +20,5 @@ Allow: /logos/
 Allow: /favicon.svg
 Allow: /theme.js
 Disallow: /
+
+Sitemap: https://www.housedge.eu/sitemap.xml
