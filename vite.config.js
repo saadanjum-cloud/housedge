@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     build: { outDir: '../dist', emptyOutDir: true, chunkSizeWarningLimit: 1500 },
     server: {
-      port: 5173, strictPort: true,
+      port: 5173, // a busy port moves to the next free one; any other: npm run dev -- --port 3001
       proxy: { '/api': { target: env.VITE_SUPABASE_URL, changeOrigin: true, rewrite: p => p.replace(/^\/api/, '/functions/v1/api') } },
     },
   };
