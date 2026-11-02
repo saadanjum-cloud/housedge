@@ -9,10 +9,11 @@ async function openInvite(token: unknown) {
   return inv as typeof inv & { orgs: { name: string } | null };
 }
 
+class Exists extends Fail { constructor() { super('An account with this email already exists. Please sign in instead.', 409); } }
 async function createAccount(emailAddr: string, pw: string, fullName: string | null) {
   const { data, error } = await db.auth.admin.createUser({ email: emailAddr, password: pw, email_confirm: true, user_metadata: { full_name: fullName } });
   if (error) {
-    if (/already been registered|already exists/i.test(error.message)) throw new Fail('An account with this email already exists. Please sign in instead.', 409);
+    if (/already been registered|already exists/i.test(error.message)) throw new Exists();
     throw new Fail(error.message);
   }
   await db.from('profiles').insert({ id: data.user.id, full_name: fullName, email: emailAddr });
@@ -40,7 +41,10 @@ serve(async (_req, body) => {
     const fullName = str(body.fullName, 120, 'Your name', true);
     const company = str(body.company, 160, 'Company name', true)!;
     const website = str(body.website, 200, 'Company website');
-    const userId = await createAccount(emailAddr, password(body.password), fullName);
+    let userId: string;
+    // An address that already has an account gets the same answer as a new one: this public form must not reveal who is a customer.
+    try { userId = await createAccount(emailAddr, password(body.password), fullName); }
+    catch (e) { if (e instanceof Exists) return { ok: true, email: emailAddr, pending: mode !== 'auto' }; throw e; }
     let orgId = null;
     if (mode === 'auto') orgId = await createClientOrg({ name: company, website, monthly_budget: STARTER_BUDGET }, userId, null);
     await db.from('signups').insert({ user_id: userId, email: emailAddr, full_name: fullName, company, website, org_id: orgId,

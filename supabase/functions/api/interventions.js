@@ -24,7 +24,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 // Checks a create/update body. `partial` allows leaving fields out (update).
 export function interventionInput(b, project, { partial = false } = {}) {
   const out = {};
-  if (!partial || b.kind !== undefined) { if (!KINDS[b.kind]) throw new InputError('Choose what kind of action this was.'); out.kind = b.kind; }
+  if (!partial || b.kind !== undefined) { if (!Object.hasOwn(KINDS, b.kind)) throw new InputError('Choose what kind of action this was.'); out.kind = b.kind; }
   if (!partial || b.title !== undefined) out.title = v.str(b.title, { max: 300, label: 'What was done', required: true });
   if (b.url !== undefined) {
     const raw = v.str(b.url, { max: 2000, label: 'Link' });

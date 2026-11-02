@@ -33,8 +33,8 @@ const COMPANY_FIELDS = ['name', 'businessId', 'vatId', 'address', 'country', 'em
 
 const fail = (msg, status = 400) => Object.assign(new Error(msg), { status, expose: true });
 const notFound = () => fail('Not found', 404);
-const countryOk = c => (COUNTRIES[c] ? c : undefined);
-const langOk = l => (LANGUAGES[l] ? l : undefined);
+const countryOk = c => (Object.hasOwn(COUNTRIES, c) ? c : undefined);
+const langOk = l => (Object.hasOwn(LANGUAGES, l) ? l : undefined);
 const cleanDomain = d => (d || '').trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '').toLowerCase() || null;
 
 type Ctx = { params: Record<string, string>; query: Record<string, string>; body: any; user: any; role: string | null; after: (() => Promise<unknown>)[] };
@@ -94,7 +94,7 @@ R('PATCH', '/me', async c => {
 });
 // Onboarding: draft the answers from the company's own website with a cheap model (nothing is saved here).
 R('POST', '/orgs/:id/prefill', async c => {
-  const org = await get('SELECT id FROM orgs WHERE id = ?', c.params.id); // visible = own company
+  const org = await get('SELECT id FROM orgs WHERE id = ? FOR UPDATE', c.params.id); // visible = own company; locked, so parallel calls queue and see each other's count
   if (!org) throw notFound();
   const key = Deno.env.get('ANTHROPIC_API_KEY');
   if (!key) throw fail('Reading websites is not connected yet. Please fill in the steps yourself.', 503);
@@ -302,7 +302,7 @@ R('POST', '/projects', async c => {
   }
   if (!orgId) throw fail('Your account is not linked to a company.', 403);
   const id = (await get('INSERT INTO projects (org_id, name, category, data_mode, engines, countries, frequency, discovery) VALUES (?,?,?,?,?,?,?,?::jsonb) RETURNING id',
-    orgId, name, CATEGORIES[b.category] ? b.category : 'business', 'live', engines.length ? engines : SUPPORTED_ENGINES,
+    orgId, name, Object.hasOwn(CATEGORIES, b.category) ? b.category : 'business', 'live', engines.length ? engines : SUPPORTED_ENGINES,
     countries.length ? countries : ['FI'], frequency, JSON.stringify(discovery))).id;
   await addBrand(id, { name: own.name, domain: cleanDomain(own.domain), aliases: own.aliases, is_own: true });
   for (const x of competitors) if (x.name) await addBrand(id, { name: x.name, domain: cleanDomain(x.domain), aliases: x.aliases });
@@ -325,7 +325,7 @@ R('PATCH', '/projects/:id', async c => {
   const b = c.body;
   const name = v.str(b.name, { max: 120, label: 'Project name' });
   if (name !== undefined) await run('UPDATE projects SET name = ? WHERE id = ?', name || p.name, p.id);
-  if (b.category && CATEGORIES[b.category]) await run('UPDATE projects SET category = ? WHERE id = ?', b.category, p.id);
+  if (b.category && Object.hasOwn(CATEGORIES, b.category)) await run('UPDATE projects SET category = ? WHERE id = ?', b.category, p.id);
   const engines = v.list(b.engines, { max: 10, label: 'Engines' });
   if (engines) await run('UPDATE projects SET engines = ? WHERE id = ?', engines.filter((e: string) => (ENGINES as any)[e]?.supported), p.id);
   const countries = v.list(b.countries, { max: 10, label: 'Countries' });
@@ -428,6 +428,7 @@ R('POST', '/projects/:id/site-check', async c => {
   const p = await projectOr404(c.params.id);
   const domain = (await M.brandsOf(p.id)).find((b: any) => b.is_own)?.domain;
   if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)) throw new InputError("Add the brand's website on the Competitors page first (e.g. example.com).");
+  await run('SELECT id FROM projects WHERE id = ? FOR UPDATE', p.id); // one check at a time per project
   if (await get("SELECT 1 FROM site_checks WHERE project_id = ? AND created_at > now() - interval '1 minute'", p.id)) throw fail('The website was just checked. Please wait a minute before checking again.', 429);
   const result = await runSiteCheck(`https://${domain}`);
   // Check results are system rows (read-only for people), saved once projectOr404 has confirmed access.
@@ -900,6 +901,13 @@ async function dispatch(base: Pick<Ctx, 'user' | 'role' | 'after'>, method: stri
   throw notFound();
 }
 
+export function oauthClientId(jwt: string): string | null {
+  try {
+    const payload = JSON.parse(atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof payload?.client_id === 'string' && payload.client_id ? payload.client_id : null;
+  } catch { return null; }
+}
+
 function cors(req: Request): Record<string, string> {
   const origin = req.headers.get('origin') || '';
   return { 'Access-Control-Allow-Origin': ORIGINS.includes(origin) ? origin : ORIGINS[0], 'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info, x-region',
@@ -921,6 +929,10 @@ Deno.serve(async req => {
     const body = ['GET', 'DELETE'].includes(req.method) ? {} : await req.json().catch(() => ({}));
     const t: number[] = [performance.now()];
     const jwt = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+    // A token issued to a connected app (Claude, ChatGPT…) through OAuth carries a client_id. It is only good for
+    // the MCP tools above, never for the app's own API: an app the person approved cannot reach account, team or
+    // admin routes. Unverified read of the claim (verification follows); a token without the claim gains nothing.
+    if (jwt && oauthClientId(jwt)) return json({ error: 'Connected apps can only use the MCP tools.' }, 403);
     const { data } = jwt && jwt.split('.').length === 3 ? await authDb.auth.getUser(jwt) : { data: null };
     const user = data?.user ?? null;
     t.push(performance.now());

@@ -53,7 +53,7 @@ const FAQ_SCHEMA = { type: 'object', additionalProperties: false, required: ['it
     properties: { question: { type: 'string' }, answer: { type: 'string' } } } } } };
 
 export async function writeDraft(project, { kind, competitor, question }) {
-  if (!DRAFT_KINDS[kind]) throw fail('Unknown draft type.');
+  if (!Object.hasOwn(DRAFT_KINDS, kind)) throw fail('Unknown draft type.');
   const p = await readProfile(project.id);
   if (!p.name || !(p.tagline || p.description)) throw fail('Fill in at least the brand name and the one-sentence description first.');
   let task, schema = TEXT_SCHEMA, title;

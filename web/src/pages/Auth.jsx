@@ -201,6 +201,9 @@ export function Consent({ user }) {
     window.location.replace(data.redirect_url);
   };
   const host = (() => { try { return new URL(req?.redirect_uri).host; } catch { return req?.redirect_uri; } })();
+  // Any app can register itself under any name, so the name proves nothing: the return address does. Known AI apps
+  // return to their own sites (Claude Code and other local tools return to this computer).
+  const known = /(^|\.)(claude\.ai|claude\.com|anthropic\.com|chatgpt\.com|openai\.com|cursor\.com)$/i.test(host?.replace(/:\d+$/, '') || '') || /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host || '');
   return (
     <Frame title="Connect an app" subtitle={req ? `${req.client.name} wants to use your Housedge account.` : 'Checking the request…'}>
       {!id ? <ErrorBox error="This link is missing its request. Start connecting again from the app you were using." /> : <>
@@ -209,6 +212,9 @@ export function Consent({ user }) {
             <div className="font-semibold">{req.client.name}</div>
             <div className="mt-0.5 break-all text-[12.5px] text-muted">Sends you back to <strong className="text-ink">{host}</strong></div>
           </div>
+          {!known && <div className="rounded-xl bg-warnBg px-4 py-3 text-[13px] text-warnInk">
+            <strong>Check before you allow.</strong> This app is not one we recognise. Only continue if you started this yourself from an app at <strong>{host}</strong>. Housedge never asks you to connect an app by email or chat message.
+          </div>}
           <div>
             <div className="font-semibold">It will be able to</div>
             <ul className="mt-1.5 list-disc space-y-1 pl-5 text-ink2">

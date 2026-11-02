@@ -23,8 +23,11 @@ export function isBlockedAddress(ip) {
   if (isV4(ip)) { const n = v4ToInt(ip); return V4_BLOCKED.some(([base, bits]) => (n >>> (32 - bits)) === (base >>> (32 - bits))); }
   if (isV6(ip)) {
     const x = ip.toLowerCase();
-    const mapped = x.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    // IPv4 inside IPv6, in any spelling: ::ffff:127.0.0.1, ::ffff:7f00:1, ::ffff:0:7f00:1 (translated), 64:ff9b::7f00:1 (NAT64)
+    const mapped = x.match(/^(?:(?:0{0,4}:){1,5}ffff:|(?:0{0,4}:){1,4}ffff:0{1,4}:|64:ff9b::)(\d+\.\d+\.\d+\.\d+)$/);
     if (mapped) return isBlockedAddress(mapped[1]);
+    const hexMapped = x.match(/^(?:(?:0{0,4}:){1,5}ffff:|(?:0{0,4}:){1,4}ffff:0{1,4}:|64:ff9b::)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+    if (hexMapped) { const n = ((parseInt(hexMapped[1], 16) << 16) | parseInt(hexMapped[2], 16)) >>> 0; return isBlockedAddress([n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.')); }
     return x === '::' || x === '::1' || /^f[cd]/.test(x) || /^fe[89ab]/.test(x) || /^ff/.test(x) || x.startsWith('2001:db8') || x.startsWith('64:ff9b');
   }
   return true;
@@ -51,7 +54,8 @@ async function checkUrl(u) {
   if (url.username || url.password) throw fail('Addresses with passwords are not allowed.', 'EBLOCKED');
   if (url.port && !['80', '443'].includes(url.port)) throw fail('Only standard web ports are allowed.', 'EBLOCKED');
   const host = url.hostname.replace(/^\[|\]$/g, '');
-  const ips = isV4(host) || isV6(host) ? [host] : await resolveAll(host);
+  if (isV4(host) || isV6(host)) throw fail('Only named websites can be checked, not IP addresses.', 'EBLOCKED'); // websites have names; literals are how internal services get reached
+  const ips = await resolveAll(host);
   if (!ips.length) throw fail('The address does not exist.', 'ENOTFOUND');
   if (ips.some(isBlockedAddress)) throw fail('That address is not allowed.', 'EBLOCKED');
   return url;
