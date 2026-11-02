@@ -5,15 +5,14 @@ import react from '@vitejs/plugin-react';
 // so the app keeps calling /api/... exactly as before.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, 'web');
+  if (mode === 'development' && !env.VITE_SUPABASE_URL) throw new Error('Missing web/.env.local. Copy web/.env.example to web/.env.local and fill in the two values (see README).');
   return {
     root: 'web',
     plugins: [react()],
     build: { outDir: '../dist', emptyOutDir: true, chunkSizeWarningLimit: 1500 },
     server: {
       port: 5173, strictPort: true,
-      proxy: env.VITE_SUPABASE_URL ? {
-        '/api': { target: env.VITE_SUPABASE_URL, changeOrigin: true, rewrite: p => p.replace(/^\/api/, '/functions/v1/api') },
-      } : { '/api': 'http://localhost:3001' },
+      proxy: { '/api': { target: env.VITE_SUPABASE_URL, changeOrigin: true, rewrite: p => p.replace(/^\/api/, '/functions/v1/api') } },
     },
   };
 });
