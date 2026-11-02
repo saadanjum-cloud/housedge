@@ -1,70 +1,75 @@
 # Housedge
 
-*Give your brand the house edge in AI answers.*
+Housedge shows brands what AI assistants (ChatGPT, Claude, Gemini, Perplexity) tell their customers about them, who gets recommended instead and why, and what to change. It measures and advises; it never tries to manipulate answers.
 
-Tracks how AI assistants (ChatGPT, Gemini, Perplexity, Claude) talk about brands, for any business, with a specialty in iGaming. Think "Google Analytics, but for what AI says about a brand".
+Live: https://www.housedge.eu · App: https://www.housedge.eu/login · Team: https://www.housedge.eu/admin/login
 
-It **measures and advises**. It never tries to change what AI models say, never posts reviews, and never promises better rankings. It asks real questions through official APIs and records the answers.
+## How it is built
 
-## What it does
-
-- **Guided setup**: discovery → brand → competitors → questions → engines → first run, with results in minutes.
-- **Headline numbers** per brand: Visibility (% of answers that mention it), Position (average rank, 1 = first), Sentiment (0–100 tone), Share of voice — each with change vs the previous period.
-- **Charts**: trends, share of voice over time, competitor ranking, visibility-vs-sentiment map, per-engine and per-country comparison.
-- **Questions**: general starter questions for any business (written from what the client offers), plus 40 pre-written iGaming questions (Finland first, plus Sweden, UK, Germany, global), bulk add, tags, topics, country, language, pause, delete.
-- **Competitor suggestions**: brands the AI keeps naming that you don't track yet, added with one click (history is recounted).
-- **Sources**: which websites the AI cites, grouped by type (review sites, forums, news, regulators, your site, competitor sites).
-- **Chats**: the real answers, with brands highlighted.
-- **AI readiness**: a website check (can AI crawlers read the client's site: robots.txt rules for AI crawlers, structured data, text readable without JavaScript, sitemap, llms.txt) and a fact check (Claude compares real answers with facts the client confirmed and flags contradictions).
-- **Suggested actions**: prioritised, plain-English ideas, each with its evidence.
-- **Client journey**: six visible stages per project — Discovery, Setup, First run, First report, Recommendations, Ongoing tracking.
-- **Reports**: frozen snapshots ("reveal" report, then monthly progress reports), printable to PDF.
-- **Exports**: CSV downloads, a token-protected API, Google Sheets (`IMPORTDATA`) and Looker Studio (via the sheet).
-- **Team**: logins, invite links, admin/member roles.
-- **Daily automatic runs** plus a "Run now" button, a **monthly spending cap**, and automatic backups.
-- Apple-style design: system font, large titles, frosted-glass menus, light and dark mode.
-- **Public website** at `/` for visitors (the app is behind **Sign in**): what the service does, how it works, FAQ and a contact form. Messages land in **Enquiries** inside the app. No invented customers, quotes or numbers; the product picture is a labelled illustration.
-- **Legal pages**: Privacy policy, Terms of use and Legal notice (public), filled from Settings → Company & legal. No tracking cookies, no third-party fonts or scripts, security headers, hidden from search engines.
-
-## Engines
-
-| Engine | Supported? | How |
+| Part | Where | Runs on |
 |---|---|---|
-| ChatGPT | Yes | OpenAI Responses API + web search tool |
-| Gemini | Yes | Gemini API + Grounding with Google Search |
-| Perplexity | Yes | Perplexity Agent API (official) |
-| Claude | Yes | Anthropic Messages API + web search tool |
-| Microsoft Copilot | No | No public API returns Copilot's answers; Bing Search API retired Aug 2025 |
-| Google AI Mode | No | No official API; only reachable by scraping Google |
-| Google AI Overviews | No | No official API; only reachable by scraping Google |
+| Web app (React + Vite + Tailwind) | `web/` | Vercel, deployed automatically on every push to `main` |
+| Public info pages (plain HTML, no JavaScript needed) | `web/public/*.html` | Vercel, same deploy |
+| API, AI checks, MCP server | `supabase/functions/api/` | Supabase Edge Function `api` (eu-west-1) |
+| Sign-up, invites, first setup | `supabase/functions/join/` | Supabase Edge Function `join` |
+| Admin-only account actions | `supabase/functions/team/` | Supabase Edge Function `team` |
+| Database schema, row-level security, schedule | `supabase/migrations/` | Supabase Postgres |
 
-API answers come from the same model families as the consumer apps but are not identical to what one person sees in the app.
+The browser calls `/api/...`; Vercel forwards that to the `api` function (see `vercel.json`). Every request runs as the signed-in person inside one database transaction, and row-level security decides what they can see. AI keys live only as Supabase function secrets.
 
-## Demo mode
+## Run it locally
 
-With `SEED_DEMO=1` the app starts in **demo mode** with three example projects (LeoVegas, Finnplay, Hacksaw Gaming). All demo answers are **simulated** and labelled as such on every screen, in every export (`simulated` column, `SIMULATED-DATA-` file names) and in every report (banner + watermark).
+Prerequisites: Node 20+, a Supabase account with access to the project, `gh` (optional, for pushing).
 
-## Running it on a computer
-
-```
+```bash
+git clone https://github.com/saadanjum-cloud/housedge.git && cd housedge
 npm install
-npm run build
-npm start          # http://localhost:3000
-npm test           # automated tests
+cp web/.env.example web/.env.local     # fill in the two public values
+cp .env.example .env                   # fill in the server-side values (never commit this file)
+npm run dev                            # http://localhost:5173, talking to the real backend
 ```
 
-Data lives in `data/app.db` (or the folder in `DATA_DIR`). Backups go to `data/backups/`.
+`web/.env.local` holds the Supabase URL and the publishable key (both public by design). `.env` holds the values the deploy and test scripts need; ask an admin for them, and keep them out of chat, screenshots and git. `.gitignore` already excludes both files.
 
-## Settings via environment variables (optional)
+The web app in development talks to the **production** backend, so sign in with a test account, not a client's.
 
-| Variable | Purpose |
-|---|---|
-| `SETUP_CODE` | **Required in production** (16+ characters). Creates the first (admin) account and resets forgotten passwords. |
-| `SEED_DEMO` | Set to `1` to load the three simulated demo clients on a new installation. Leave unset for a real installation. |
-| `DATA_DIR` | Where the database and backups are stored (use a persistent disk). |
-| `PORT` | Web port (default 3000). |
-| `KEY_OPENAI`, `KEY_GEMINI`, `KEY_PERPLEXITY`, `KEY_ANTHROPIC` | API keys, if you prefer not to paste them in Settings. |
+## Deploy
 
-Security and key rotation: [docs/SECURITY.md](docs/SECURITY.md). Developer handover and review brief: [docs/HANDOVER.md](docs/HANDOVER.md). Every variable name is listed in `.env.example`.
+The web app deploys itself: push to `main` and Vercel builds `web/` into `dist/`. `main` has a pull-request rule; repo owners can bypass it, everyone else opens a PR.
 
-See [docs/GOING_LIVE.md](docs/GOING_LIVE.md) for the step-by-step guide to connecting the real AI services and publishing online.
+Backend changes are deployed by hand:
+
+```bash
+set -a; . ./.env; set +a
+# database change (a new file in supabase/migrations/, applied once, in order)
+node supabase/tests/run.mjs supabase/migrations/<file>.sql
+# functions (only the ones you changed)
+npx -y supabase functions deploy api  --project-ref $SUPABASE_PROJECT_REF --use-api --no-verify-jwt
+npx -y supabase functions deploy join --project-ref $SUPABASE_PROJECT_REF --use-api --no-verify-jwt
+npx -y supabase functions deploy team --project-ref $SUPABASE_PROJECT_REF --use-api --no-verify-jwt
+```
+
+`--no-verify-jwt` is intended: the functions check the sign-in token themselves (public routes such as the contact form and the sign-in state need no token). Secrets are set in Supabase → Edge Functions → Secrets, never in code.
+
+## Tests
+
+```bash
+set -a; . ./.env; set +a
+npm run test:rls      # row-level security: who can read and change what (runs in a transaction, rolls back)
+npm run test:api      # API routes end to end against the live backend
+npm run test:auth     # sign-up, invite and sign-in flows
+deno run -A --node-modules-dir=none --no-lock supabase/tests/mcp.mjs   # MCP server protocol check, no database needed
+```
+
+Run `test:rls` after any migration that touches policies.
+
+## Connected apps (MCP)
+
+`https://www.housedge.eu/mcp` is an MCP server: clients use their Housedge data inside Claude, ChatGPT, Cursor and Claude Code. Sign-in is OAuth through Supabase Auth; the approval page is `/oauth/consent`. Tokens issued to connected apps work only on `/mcp`. Tool list and rules: `supabase/functions/api/mcp.js`.
+
+## Working rules
+
+- Never commit `.env`, `web/.env.local`, keys, passwords or client data. Templates are `.env.example` and `web/.env.example`.
+- Every route that changes data goes through the API's own checks and the spending locks in `supabase/functions/api/spend.js`; do not add direct database writes from the browser.
+- Collected AI answers are untrusted text: keep them inside `<untrusted_ai_answer>` when they reach a model.
+- No emojis in the product. Recommend only honest actions to clients.
