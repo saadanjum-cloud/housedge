@@ -18,6 +18,7 @@ import { runSiteCheck } from './sitecheck.js';
 import { prefillFromWebsite } from './prefill.js';
 import { outreachView, addTarget, updateTarget, draftEmail } from './outreach.js';
 import { askAssistant } from './assistant.js';
+import { serveMcp } from './mcp.js';
 import { assertCanSpend } from './spend.js';
 import { writeDraft, checkFacts } from './helpers-ai.js';
 import Anthropic from 'npm:@anthropic-ai/sdk@0.133.0';
@@ -647,7 +648,7 @@ R('POST', '/projects/:id/assistant', async c => {
   const key = Deno.env.get('ANTHROPIC_API_KEY');
   if (!key) throw fail('Ask Housedge is not connected yet.', 503);
   const r = await askAssistant(p, c.body.messages, { apiKey: key, userId: c.user.id });
-  return { reply: r.reply, toolsUsed: [...new Set(r.toolsUsed)], cost: Math.round(r.cost * 10000) / 10000 };
+  return { reply: r.reply, toolsUsed: [...new Set(r.toolsUsed)], pages: r.pages, cost: Math.round(r.cost * 10000) / 10000 };
 });
 
 // ---------------------------------------------------------------- schedule (called every hour by the database's pg_cron)
@@ -888,6 +889,17 @@ R('POST', '/team/sign-out-everyone', async c => {
 });
 
 // ---------------------------------------------------------------- serving
+// Runs one of the routes above inside the current request (used by the MCP tools, so a change made from Claude or
+// ChatGPT gets exactly the same checks and limits as the same change made in the app).
+async function dispatch(base: Pick<Ctx, 'user' | 'role' | 'after'>, method: string, target: string, body: any = {}) {
+  const [p, qs = ''] = target.split('?');
+  for (const r of routes) {
+    const m = r.method === method && p.match(r.re);
+    if (m) return r.handler({ ...base, params: m.groups || {}, query: Object.fromEntries(new URLSearchParams(qs)), body: body || {} });
+  }
+  throw notFound();
+}
+
 function cors(req: Request): Record<string, string> {
   const origin = req.headers.get('origin') || '';
   return { 'Access-Control-Allow-Origin': ORIGINS.includes(origin) ? origin : ORIGINS[0], 'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info, x-region',
@@ -897,9 +909,10 @@ function cors(req: Request): Record<string, string> {
 Deno.serve(async req => {
   const headers = cors(req);
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...headers, 'Content-Type': 'application/json' } });
-  if (req.method === 'OPTIONS') return new Response('ok', { headers });
   const url = new URL(req.url);
   const path = url.pathname.replace(/^\/(functions\/v1\/)?api/, '') || '/';
+  if (path === '/mcp' || path.startsWith('/.well-known/oauth-protected-resource')) return serveMcp(req, path, dispatch);
+  if (req.method === 'OPTIONS') return new Response('ok', { headers });
   let route, params: Record<string, string> = {};
   for (const r of routes) { const m = r.method === req.method && path.match(r.re); if (m) { route = r; params = m.groups || {}; break; } }
   if (!route) return json({ error: 'Not found' }, 404);

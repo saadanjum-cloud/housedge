@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase, fn, signIn } from '../supabase.js';
-import { api } from '../lib.js';
+import { api, nextPath, signOut } from '../lib.js';
 import { ErrorBox } from '../ui.jsx';
 import { LegalLinks } from './Legal.jsx';
 import { Aurora, Logo } from '../motion.jsx';
@@ -53,7 +53,7 @@ const samePasswords = v => { if (v.password !== v.confirm) throw new Error('The 
 export function Login() {
   return (
     <Frame title="Sign in" subtitle="Welcome back to Housedge.">
-      <Form button="Sign in" submit={v => signIn(v.email, v.password)} fields={[
+      <Form button="Sign in" to={nextPath()} submit={v => signIn(v.email, v.password)} fields={[
         { name: 'email', label: 'Email', type: 'email', auto: 'email' },
         { name: 'password', label: 'Password', type: 'password', auto: 'current-password' },
       ]} />
@@ -173,6 +173,58 @@ export function Invite() {
         { name: 'password', label: NEW_PASSWORD, type: 'password', auto: 'new-password' },
         { name: 'confirm', label: 'Repeat the password', type: 'password', auto: 'new-password' },
       ]} />
+    </Frame>
+  );
+}
+
+// Claude, ChatGPT or another app asks to use this Housedge account (OAuth through Supabase Auth). The person sees who
+// is asking and where they will be sent back, and approves or cancels. Anyone can register an app with any name, so
+// the return address is shown too. Signed out: sign in first, then come back here.
+export function Consent({ user }) {
+  const id = new URLSearchParams(window.location.search).get('authorization_id') || '';
+  const [req, setReq] = useState(null);
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!user || !id) return;
+    supabase.auth.oauth.getAuthorizationDetails(id).then(({ data, error }) => {
+      if (error) return setErr(error.message);
+      if (!data.authorization_id) return window.location.replace(data.redirect_url); // approved before
+      setReq(data);
+    });
+  }, [user, id]);
+  if (!user) { window.location.replace(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`); return null; }
+  const decide = async approve => {
+    setBusy(true); setErr(null);
+    const { data, error } = await (approve ? supabase.auth.oauth.approveAuthorization(id, { skipBrowserRedirect: true }) : supabase.auth.oauth.denyAuthorization(id, { skipBrowserRedirect: true }));
+    if (error) { setErr(error.message); setBusy(false); return; }
+    window.location.replace(data.redirect_url);
+  };
+  const host = (() => { try { return new URL(req?.redirect_uri).host; } catch { return req?.redirect_uri; } })();
+  return (
+    <Frame title="Connect an app" subtitle={req ? `${req.client.name} wants to use your Housedge account.` : 'Checking the request…'}>
+      {!id ? <ErrorBox error="This link is missing its request. Start connecting again from the app you were using." /> : <>
+        {req && <div className="grid gap-4 text-[14px]">
+          <div className="rounded-xl bg-fill px-4 py-3">
+            <div className="font-semibold">{req.client.name}</div>
+            <div className="mt-0.5 break-all text-[12.5px] text-muted">Sends you back to <strong className="text-ink">{host}</strong></div>
+          </div>
+          <div>
+            <div className="font-semibold">It will be able to</div>
+            <ul className="mt-1.5 list-disc space-y-1 pl-5 text-ink2">
+              <li>read your AI visibility data: answers, competitors, sources, actions, reports</li>
+              <li>with your go-ahead in the chat: run checks, add questions and competitors, update actions and the work log</li>
+            </ul>
+            <p className="mt-2 text-[12.5px] text-muted">It works as you ({user.email}) and sees only what you can see. It cannot change your password, people or billing.</p>
+          </div>
+          <div className="flex gap-2">
+            <button className="btn-primary flex-1 py-3" disabled={busy} onClick={() => decide(true)}>Allow</button>
+            <button className="btn-ghost flex-1 py-3" disabled={busy} onClick={() => decide(false)}>Cancel</button>
+          </div>
+          <button className="text-center text-[12.5px] text-muted hover:underline" onClick={signOut}>Not {user.email}? Sign out</button>
+        </div>}
+        <ErrorBox error={err} />
+      </>}
     </Frame>
   );
 }

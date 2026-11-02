@@ -7,6 +7,9 @@ export const REGION = 'eu-west-1';
 // True when this browser holds a saved sign-in; without one the visitor cannot be signed in.
 export const hasSavedSession = () => { try { return Object.keys(localStorage).some(k => k.startsWith('sb-') && k.endsWith('-auth-token')); } catch { return true; } };
 
+// Where to go after signing in (?next=/path): only a path on this site, never another website.
+export const nextPath = () => { const n = new URLSearchParams(window.location.search).get('next') || ''; return /^\/(?![/\\])/.test(n) ? n : '/'; };
+
 // Links that came from AI answers: only open plain web addresses.
 export const safeHref = u => { try { const x = new URL(u); return x.protocol === 'https:' || x.protocol === 'http:' ? x.href : undefined; } catch { return undefined; } };
 

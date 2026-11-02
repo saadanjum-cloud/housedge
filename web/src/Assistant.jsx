@@ -2,7 +2,8 @@
 // The conversation lives only in this browser tab; each question costs a few cents and counts toward the cap.
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Sparkles, X, Send, RotateCcw, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Sparkles, X, Send, RotateCcw, Loader2, ArrowRight } from 'lucide-react';
 import { api } from './lib.js';
 
 const STARTERS = [
@@ -11,7 +12,14 @@ const STARTERS = [
   'Which 3 websites should we try to get listed on first?',
   'What do AI assistants say about us that is wrong?',
   'Write a 5-line summary of this month for our CEO.',
+  'How do I add a competitor?',
+  'Where do I get the code for our website?',
 ];
+
+// Pages Ask Housedge can send people to (same names as the server's open_page tool).
+const PAGES = { overview: 'Overview', chats: 'Chats', prompts: 'Questions', competitors: 'Competitors', sources: 'Sources', actions: 'Suggested actions',
+  outreach: 'Outreach', work: 'Work log', readiness: 'AI readiness', optimise: 'Optimise', reports: 'Reports', settings: 'Project settings', account: 'Your account' };
+const pagePath = (id, page) => (page === 'account' ? '/account#connect' : `/p/${id}/${page}`);
 
 // Small, safe formatter for the reply: paragraphs, bullet and numbered lists, **bold**. No HTML is injected.
 function Rich({ text }) {
@@ -62,7 +70,7 @@ export default function Assistant({ project }) {
     setMsgs(next); setText(''); setErr(null); setBusy(true);
     try {
       const r = await api(`/projects/${project.id}/assistant`, { method: 'POST', body: { messages: next.map(({ role, content }) => ({ role, content })) } });
-      setMsgs(m => [...m, { role: 'assistant', content: r.reply, cost: r.cost, tools: r.toolsUsed }]);
+      setMsgs(m => [...m, { role: 'assistant', content: r.reply, cost: r.cost, tools: r.toolsUsed, pages: (r.pages || []).filter(x => PAGES[x]) }]);
     } catch (e) { setErr(e.message); setMsgs(m => m.slice(0, -1)); setText(question); }
     setBusy(false);
   };
@@ -105,6 +113,10 @@ export default function Assistant({ project }) {
                 ? <div key={i} className="ml-auto max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md px-3.5 py-2.5" style={{ background: 'var(--bubble)', color: 'var(--bubble-ink)' }}>{m.content}</div>
                 : <div key={i} className="max-w-[95%]">
                     <div className="rounded-2xl rounded-bl-md bg-raised px-3.5 py-3 text-ink"><Rich text={m.content} /></div>
+                    {m.pages?.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{m.pages.map(x => (
+                      <Link key={x} to={pagePath(project.id, x)} onClick={() => { if (x === 'account') setOpen(false); }}
+                        className="inline-flex items-center gap-1 rounded-full border border-line px-3 py-1.5 text-[12.5px] font-medium text-ink transition-colors hover:border-accent hover:text-accent">
+                        Open {PAGES[x]}<ArrowRight size={13} /></Link>))}</div>}
                     <div className="mt-1 pl-1 text-[11px] text-muted">Looked at: {(m.tools || []).map(t => t.replace(/^get_|_/g, ' ').trim()).join(', ') || 'conversation only'}{m.cost ? ` · about $${m.cost.toFixed(3)}` : ''}</div>
                   </div>))}
               {busy && <div className="flex items-center gap-2 text-[13px] text-muted"><Loader2 size={14} className="animate-spin" />Looking at the data…</div>}

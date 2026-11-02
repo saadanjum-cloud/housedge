@@ -10,6 +10,18 @@
       "destination": "https://ndvaqcsdyuqrbnqslstu.supabase.co/functions/v1/api/:path*"
     },
     {
+      "source": "/mcp",
+      "destination": "https://ndvaqcsdyuqrbnqslstu.supabase.co/functions/v1/api/mcp"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource/:path*",
+      "destination": "https://ndvaqcsdyuqrbnqslstu.supabase.co/functions/v1/api/.well-known/oauth-protected-resource"
+    },
+    {
+      "source": "/.well-known/oauth-authorization-server/:path*",
+      "destination": "https://ndvaqcsdyuqrbnqslstu.supabase.co/.well-known/oauth-authorization-server/auth/v1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

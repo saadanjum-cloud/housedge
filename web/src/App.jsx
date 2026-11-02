@@ -7,10 +7,10 @@ import {
   LayoutDashboard, MessageSquareText, Link2, Users, ListChecks, FileText, Settings, Plus, FolderKanban,
   Sun, Moon, Monitor, LogOut, Check, Inbox, Globe, Play, Loader2, Download, Route as RouteIcon, ClipboardList, Lightbulb, ListTodo, Send, Menu, X, ShieldCheck, WandSparkles, Gauge,
 } from 'lucide-react';
-import { api, authHeaders, useApi, setTheme, useDark, useFilters, fmtDate, PREVIEW, signOut, useIdleSignOut, hasSavedSession } from './lib.js';
+import { api, authHeaders, useApi, setTheme, useDark, useFilters, fmtDate, PREVIEW, signOut, useIdleSignOut, hasSavedSession, nextPath } from './lib.js';
 import { Spinner, SimBadge, Badge, ErrorBox, useToast, Segmented } from './ui.jsx';
 const authPage = name => lazy(() => import('./pages/Auth.jsx').then(m => ({ default: m[name] })));
-const [Login, Setup, Invite, Reset, ResetPassword, AdminLogin, SignUp] = ['Login', 'Setup', 'Invite', 'Reset', 'ResetPassword', 'AdminLogin', 'SignUp'].map(authPage);
+const [Login, Setup, Invite, Reset, ResetPassword, AdminLogin, SignUp, Consent] = ['Login', 'Setup', 'Invite', 'Reset', 'ResetPassword', 'AdminLogin', 'SignUp', 'Consent'].map(authPage);
 const Onboarding = lazy(() => import('./pages/Onboarding.jsx'));
 const AdminClients = lazy(() => import('./pages/Admin.jsx').then(m => ({ default: m.AdminClients })));
 const AdminClient = lazy(() => import('./pages/Admin.jsx').then(m => ({ default: m.AdminClient })));
@@ -41,7 +41,7 @@ const Assistant = lazy(() => import('./Assistant.jsx'));
 
 // No saved sign-in in this browser: the visitor cannot be signed in, so the public pages render at once instead of
 // waiting for the server to confirm it.
-const PUBLIC_FIRST = ['/', '/website', '/login', '/admin/login', '/onboarding', '/privacy', '/terms', '/legal'];
+const PUBLIC_FIRST = ['/', '/website', '/login', '/admin/login', '/onboarding', '/privacy', '/terms', '/legal', '/oauth/consent'];
 
 export default function App() {
   const [auth, setAuth] = useState(null);
@@ -55,7 +55,8 @@ export default function App() {
 function AppRoutes({ auth, loc }) {
   return (
     <Routes>
-      <Route path="/login" element={auth.needsSetup ? <Navigate to="/setup" /> : auth.user ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/login" element={auth.needsSetup ? <Navigate to="/setup" /> : auth.user ? <Navigate to={nextPath()} replace /> : <Login />} />
+      <Route path="/oauth/consent" element={<Consent user={auth.user} />} />
       <Route path="/admin/login" element={auth.needsSetup ? <Navigate to="/setup" /> : auth.user && auth.user.role !== 'client' ? <Navigate to="/admin" /> : <AdminLogin />} />
       <Route path="/onboarding" element={auth.user ? <Navigate to="/" /> : <SignUp />} />
       <Route path="/website" element={<Home signedIn={!!auth.user} />} />

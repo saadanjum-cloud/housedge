@@ -1,5 +1,6 @@
-// Your account, for everyone signed in (clients and team): name, job title and password.
-import { useState } from 'react';
+// Your account, for everyone signed in (clients and team): name, job title, password, and connecting Housedge to AI apps.
+import { useEffect, useState } from 'react';
+import { Copy } from 'lucide-react';
 import { api } from '../lib.js';
 import { useUser } from '../ctx.js';
 import { Card, PageHeader, ErrorBox, useToast } from '../ui.jsx';
@@ -42,6 +43,45 @@ export default function Account() {
           </div>
         </Card>
       </div>
+      <Connect />
     </>
+  );
+}
+
+// Housedge's MCP server: the same address works in Claude, ChatGPT, Claude Code and Cursor; each asks you to sign in once.
+const MCP_URL = 'https://www.housedge.eu/mcp';
+function Connect() {
+  const toast = useToast();
+  useEffect(() => { if (window.location.hash === '#connect') document.getElementById('connect')?.scrollIntoView({ behavior: 'smooth' }); }, []);
+  const copy = text => navigator.clipboard.writeText(text).then(() => toast('Copied'), () => toast('Copy failed: select the text instead'));
+  const Code = ({ text }) => (
+    <div className="mt-1.5 flex items-center gap-2 rounded-xl bg-fill px-3 py-2">
+      <code className="min-w-0 flex-1 break-all text-[12.5px]">{text}</code>
+      <button className="btn-ghost btn-sm shrink-0" onClick={() => copy(text)} aria-label="Copy"><Copy size={13} />Copy</button>
+    </div>
+  );
+  const apps = [
+    ['Claude', 'In claude.ai: Settings, Connectors, Add custom connector. Name it Housedge, paste the address, then Connect and allow.'],
+    ['ChatGPT', 'In ChatGPT: Settings, Apps, Advanced settings, turn on Developer mode, then Create app. Paste the address, choose OAuth, then connect and allow.'],
+    ['Cursor and other MCP apps', 'Add a remote MCP server with the address above. The app opens Housedge in your browser to sign in.'],
+  ];
+  return (
+    <div id="connect" className="mt-4 scroll-mt-6">
+      <Card title="Use Housedge in Claude and ChatGPT" subtitle="Ask about your AI visibility from the AI assistant you already use. It works as you and sees only what you can see; changes always need your go-ahead in the chat.">
+        <div className="grid gap-5 text-[14px]">
+          <div><span className="label">Address</span><Code text={MCP_URL} /></div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {apps.map(([name, how]) => <div key={name}><div className="font-semibold">{name}</div><p className="mt-1 text-[13px] text-ink2">{how}</p></div>)}
+          </div>
+          <div>
+            <div className="font-semibold">For developers: Claude Code</div>
+            <p className="mt-1 text-[13px] text-ink2">Connect once, type /mcp and sign in. Then, inside your website's code, run the Housedge fix command: Claude Code reads the fixes from Housedge and applies them to your site for you to review.</p>
+            <Code text={`claude mcp add --transport http housedge ${MCP_URL}`} />
+            <Code text="/mcp__housedge__fix-website" />
+          </div>
+          <p className="text-[12.5px] text-muted">Try asking: “How visible are we in ChatGPT this month?”, “Which competitor is named most, and why?”, “Add these three questions to Housedge.”</p>
+        </div>
+      </Card>
+    </div>
   );
 }
