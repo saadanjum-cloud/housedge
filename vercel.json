@@ -7,15 +7,15 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://ndvaqcsdyuqrbnqslstu.supabase.co/functions/v1/api/:path*"
+      "destination": "https://ndvaqcsdyuqrbnqslstu.supabase.co/functions/v1/api/:path*?forceFunctionRegion=eu-west-1"
     },
     {
       "source": "/mcp",
-      "destination": "https://ndvaqcsdyuqrbnqslstu.supabase.co/functions/v1/api/mcp"
+      "destination": "https://ndvaqcsdyuqrbnqslstu.supabase.co/functions/v1/api/mcp?forceFunctionRegion=eu-west-1"
     },
     {
       "source": "/.well-known/oauth-protected-resource/:path*",
-      "destination": "https://ndvaqcsdyuqrbnqslstu.supabase.co/functions/v1/api/.well-known/oauth-protected-resource"
+      "destination": "https://ndvaqcsdyuqrbnqslstu.supabase.co/functions/v1/api/.well-known/oauth-protected-resource?forceFunctionRegion=eu-west-1"
     },
     {
       "source": "/.well-known/oauth-authorization-server/:path*",

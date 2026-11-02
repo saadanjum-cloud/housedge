@@ -61,7 +61,7 @@ export function TrendChart({ data, brands, prefix = 'v', hidden = new Set(), hei
       <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
         <CartesianGrid vertical={false} stroke={c.grid} />
         <XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill: c.muted, fontSize: 11 }} axisLine={{ stroke: c.axis }} tickLine={false} minTickGap={28} />
-        <YAxis tick={{ fill: c.muted, fontSize: 11 }} axisLine={false} tickLine={false} domain={domain} unit={unit === '%' ? '%' : ''} width={44} reversed={prefix === 'p'} allowDecimals={false} />
+        <YAxis tick={{ fill: c.muted, fontSize: 11 }} axisLine={false} tickLine={false} domain={domain} unit={unit === '%' ? '%' : ''} width={52} reversed={prefix === 'p'} allowDecimals={false} />
         <Tooltip content={<TipBox brands={brands} unit={unit} />} cursor={{ stroke: c.axis, strokeWidth: 1 }} />
         {brands.filter(b => !hidden.has(b.id)).map(b => (
           <Line key={b.id} type="monotone" dataKey={`${prefix}_${b.id}`} stroke={c.brand(b.color)} strokeWidth={b.is_own ? 2.5 : 1.75}
@@ -88,7 +88,7 @@ export function WorkLogChart({ weekly, actions, height = 240 }) {
       <LineChart data={data} margin={{ top: 16, right: 12, bottom: 0, left: -12 }}>
         <CartesianGrid vertical={false} stroke={c.grid} />
         <XAxis dataKey="week" tickFormatter={shortDay} tick={{ fill: c.muted, fontSize: 11 }} axisLine={{ stroke: c.axis }} tickLine={false} minTickGap={28} />
-        <YAxis tick={{ fill: c.muted, fontSize: 11 }} axisLine={false} tickLine={false} domain={[0, 100]} unit="%" width={44} allowDecimals={false} />
+        <YAxis tick={{ fill: c.muted, fontSize: 11 }} axisLine={false} tickLine={false} domain={[0, 100]} unit="%" width={52} allowDecimals={false} />
         <Tooltip formatter={(v, _, p) => [`${v}% (${p.payload.named} of ${p.payload.answers} answers)`, 'Mentioned']} labelFormatter={w => `Week of ${shortDay(w)}`}
           contentStyle={{ background: c.surface, border: `1px solid ${c.grid}`, borderRadius: 12, fontSize: 12 }} />
         {marks.map((m, i) => <ReferenceLine key={i} x={m.week} stroke={c.axis} strokeDasharray="4 3" label={{ value: '●', position: 'top', fill: c.brand(1), fontSize: 10 }} />)}

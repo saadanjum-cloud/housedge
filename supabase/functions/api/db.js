@@ -43,15 +43,16 @@ const inTx = (user, fn) => sql.begin(async t => {
   try { return await als.run(store, fn); } finally { store.open = false; }
 });
 const asPerson = (t, { claims, sub }) => t.unsafe(`select set_config('request.jwt.claims', $1, true), set_config('request.jwt.claim.sub', $2, true), set_config('role', 'authenticated', true)`, [claims, sub]);
-// Back to the connection's own role (the table owner, trusted): no claims, so private.is_trusted() is true.
-const asOwner = t => t.unsafe(`select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true), set_config('role', 'postgres', true)`);
+// Back to the connection's own login role (full rights): no claims, so private.is_trusted() is true.
+const asOwner = t => t.unsafe(`select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true), set_config('role', 'none', true)`);
 
 // Also returns the person's team role, read in the same round trip, so a request needs one connection.
 export function asUser(user, fn) {
   const claims = JSON.stringify({ sub: user.id, role: 'authenticated', email: user.email });
   return inTx({ claims, sub: user.id }, async () => {
-    const [r] = await tx().unsafe(`select (select role from public.staff where user_id = $1::uuid) role, set_config('request.jwt.claims', $2, true),
-      set_config('request.jwt.claim.sub', $1, true), set_config('role', 'authenticated', true)`, [user.id, claims]);
+    // Each parameter has one type: $3 is read as a uuid, $2 as text (one parameter cannot be both).
+    const [r] = await tx().unsafe(`select (select role from public.staff where user_id = $3::uuid) role, set_config('request.jwt.claims', $1, true),
+      set_config('request.jwt.claim.sub', $2, true), set_config('role', 'authenticated', true)`, [claims, user.id, user.id]);
     return fn(r.role || null);
   });
 }

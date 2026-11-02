@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Pause, Play, Trash2, Tag, Search, Info } from 'lucide-react';
-import { useApi, useFilters, api, fmtPct, fmtPos, COUNTRY_FLAGS } from '../lib.js';
+import { useApi, useFilters, api, fmtPct, fmtPos, COUNTRY_FLAGS, namesBrand } from '../lib.js';
 import { useMeta, useProject } from '../ctx.js';
 import { Card, PageHeader, Spinner, ErrorBox, Modal, Badge, Sentiment, Empty, useToast, SimBanner } from '../ui.jsx';
 import FilterBar from './FilterBar.jsx';
@@ -9,6 +9,7 @@ import FilterBar from './FilterBar.jsx';
 export default function Prompts() {
   const meta = useMeta();
   const { project, refreshHeader, readOnly } = useProject();
+  const ownBrand = project.brands.find(b => b.is_own);
   const { qs } = useFilters();
   const list = useApi(`/projects/${project.id}/prompts?${qs}`);
   const reloadAll = () => { list.reload(); refreshHeader(); };
@@ -77,7 +78,7 @@ export default function Prompts() {
                     {!readOnly && <td className="td"><input type="checkbox" aria-label="Select" checked={sel.has(p.id)} onChange={() => { const n = new Set(sel); n.has(p.id) ? n.delete(p.id) : n.add(p.id); setSel(n); }} /></td>}
                     <td className="td max-w-md">
                       <Link to={`../chats?prompt=${p.id}`} className="hover:underline">{p.text}</Link>
-                      <div className="mt-1 flex flex-wrap gap-1">{p.topic && <Badge>{p.topic}</Badge>}{p.tags.filter(t => t !== p.topic).map(t => <Badge key={t} tone="accent">{t}</Badge>)}</div>
+                      <div className="mt-1 flex flex-wrap gap-1">{namesBrand(p.text, ownBrand) && <span title="This question contains your brand name, so AI names you almost automatically. Questions without it show whether AI recommends you."><Badge tone="warn">Names you</Badge></span>}{p.topic && <Badge>{p.topic}</Badge>}{p.tags.filter(t => t !== p.topic).map(t => <Badge key={t} tone="accent">{t}</Badge>)}</div>
                     </td>
                     <td className="td whitespace-nowrap text-xs">{COUNTRY_FLAGS[p.country]} {p.country}<div className="text-muted">{meta.languages[p.language] || p.language}</div></td>
                     <td className="td tnum">{fmtPct(p.visibility)}<div className="text-[11px] text-muted">{p.answers} answers</div></td>

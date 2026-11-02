@@ -160,6 +160,10 @@ export function useFilters() {
   return { f, set, qs };
 }
 
+// A question that contains the brand's own name (or another name it goes by) gets the brand named almost by
+// definition, so it says little about being recommended. Used to show visibility on the other questions too.
+export const namesBrand = (text, brand) => !!brand && [brand.name, ...(brand.aliases || [])].filter(n => n && n.length > 1)
+  .some(n => new RegExp(`(^|[^\\p{L}\\p{N}])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}\\p{N}])`, 'iu').test(text));
 export const fmtPct = v => (v == null ? '—' : `${Math.round(v * 10) / 10}%`);
 export const fmtPos = v => (v == null ? '—' : `#${(Math.round(v * 10) / 10).toFixed(1)}`);
 export const fmtMoney = v => `$${(v || 0).toFixed(v < 10 ? 2 : 0)}`;

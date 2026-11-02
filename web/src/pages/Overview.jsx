@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Sparkles, Home, ArrowUpRight, ArrowDownRight, ChevronsUp, ChevronsDown, AlertTriangle } from 'lucide-react';
-import { useApi, useFilters, api, fmtPct, fmtPos, COUNTRY_FLAGS } from '../lib.js';
+import { Plus, Sparkles, Home, ArrowUpRight, ArrowDownRight, ChevronsUp, ChevronsDown, AlertTriangle, ArrowRight, Lightbulb } from 'lucide-react';
+import { useApi, useFilters, api, fmtPct, fmtPos, COUNTRY_FLAGS, namesBrand } from '../lib.js';
 import { useMeta, useProject } from '../ctx.js';
 import { Card, Stat, Delta, Spinner, ErrorBox, SimBanner, Empty, Segmented, BrandDot, Bar, Sentiment, useToast } from '../ui.jsx';
 import { TrendChart, ShareOfVoiceChart, VisibilitySentimentMap, Legend, smooth } from '../charts.jsx';
@@ -16,6 +16,8 @@ export default function Overview() {
   const engines = useApi(`/projects/${project.id}/engines?${qs}`);
   const countries = useApi(`/projects/${project.id}/countries?${qs}`);
   const sugg = useApi(`/projects/${project.id}/suggestions?${qs}`);
+  const prompts = useApi(`/projects/${project.id}/prompts?${qs}`);
+  const actions = useApi(`/projects/${project.id}/actions?${qs}`);
 
   if (sum.error) return <ErrorBox error={sum.error} />;
   if (!sum.data) return <><FilterBar /><Spinner /></>;
@@ -42,6 +44,8 @@ export default function Overview() {
           delta={<Delta now={own?.sov} before={own?.prev?.sov} />} sub={`rank #${own?.rank} of ${s.brands.length}`} />
       </div>
       <p className="mt-2 text-xs text-muted">Changes compare with the previous {f.days} days.</p>
+      {own && <Discovery prompts={prompts.data} own={project.brands.find(b => b.is_own) || own} />}
+      <NextActions list={actions.data} />
 
       {!!sugg.data?.length && <Suggestions list={sugg.data.slice(0, 3)} projectId={project.id} onAdded={reload} readOnly={readOnly} />}
 
@@ -63,6 +67,49 @@ export default function Overview() {
       <EngineTable data={engines.data} brands={s.brands} colorOf={colorOf} />
       <CountryTable data={countries.data} brands={s.brands} />
     </>
+  );
+}
+
+// Visibility on the questions that do not name the brand: the honest measure of being recommended.
+function Discovery({ prompts, own }) {
+  if (!prompts) return null;
+  const asked = prompts.filter(p => p.active && p.answers > 0);
+  const branded = asked.filter(p => namesBrand(p.text, own));
+  if (!branded.length) return null;
+  const open = asked.filter(p => !branded.includes(p));
+  const n = open.reduce((t, p) => t + p.answers, 0);
+  const v = n ? open.reduce((t, p) => t + (p.visibility || 0) * p.answers, 0) / n : null;
+  return (
+    <div className="mt-4 rounded-xl border border-line bg-surface px-4 py-3 text-[13.5px]">
+      <span className="font-semibold">{v == null ? 'Add questions that do not name you' : `${fmtPct(v)} when people do not ask about ${own.name} by name`}</span>
+      <span className="text-ink2"> · {branded.length} of your {asked.length} questions contain "{own.name}", so AI names you there almost automatically. {v == null
+        ? 'The real test is a question like "best smart ring for sleep": add some on the Questions page.'
+        : `On the other ${open.length} (${n} answers) AI named ${own.name} in ${fmtPct(v)} of answers. That is the number to grow.`}</span>{' '}
+      <Link to="../prompts" className="text-accent hover:underline">Questions</Link>
+    </div>
+  );
+}
+
+// The three most important open suggestions, so the overview always ends in something to do.
+function NextActions({ list }) {
+  const open = (list || []).filter(a => !a.status || a.status === 'open' || a.status === 'planned').slice(0, 3);
+  if (!open.length) return null;
+  return (
+    <div className="mt-4 rounded-xl border border-line bg-surface p-4">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2 text-[14px] font-semibold"><Lightbulb size={15} className="text-accent" />What to do next</span>
+        <Link to="../actions" className="inline-flex items-center gap-1 text-[12.5px] text-accent hover:underline">All suggested actions<ArrowRight size={13} /></Link>
+      </div>
+      <ol className="grid gap-2 md:grid-cols-3">
+        {open.map((a, i) => (
+          <li key={a.key}><Link to="../actions" className="block h-full rounded-lg bg-fill px-3 py-2.5 transition-colors hover:bg-raised">
+            <div className="text-[11.5px] text-muted">{i + 1} · {a.priority === 'high' ? 'High' : a.priority === 'medium' ? 'Medium' : 'Low'} priority</div>
+            <div className="mt-0.5 text-[13.5px] font-medium leading-snug">{a.title}</div>
+            {a.why && <div className="mt-1 line-clamp-2 text-[12px] text-ink2">{a.why}</div>}
+          </Link></li>
+        ))}
+      </ol>
+    </div>
   );
 }
 

@@ -254,7 +254,7 @@ function Shell({ user }) {
           </aside>
         </div>
       )}
-      <main className="min-w-0 flex-1 px-4 py-6 md:px-10 md:py-10 print-full">
+      <main className="min-w-0 flex-1 px-4 pb-24 pt-6 md:px-10 md:pb-24 md:pt-10 print-full">
         {PREVIEW && <div className="no-print mx-auto mb-4 max-w-[1280px] rounded-2xl bg-accentSoft px-5 py-3 text-[13px] text-ink">
           <strong>Read-only preview.</strong> Click anything to look around. Saving, "Run now", downloads and some filters (country, tag, search) only work in the real app.</div>}
         <div className="mx-auto max-w-[1280px] print-full">
@@ -291,6 +291,11 @@ function ProjectLayout() {
   const timer = useRef();
 
   useEffect(() => { if (p.data?.activeRun) setRunId(p.data.activeRun.id); }, [p.data?.activeRun?.id]);
+  // The website check is free: run it once if it never ran, so AI readiness and Optimise show real results.
+  useEffect(() => {
+    if (readOnly) return;
+    api(`/projects/${id}/site-check`).then(r => { if (r.domain && !r.latest) api(`/projects/${id}/site-check`, { method: 'POST' }).catch(() => {}); }).catch(() => {});
+  }, [id, readOnly]);
   useEffect(() => {
     if (!runId) return;
     const poll = async () => {

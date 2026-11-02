@@ -11,7 +11,7 @@ export function CountUp({ value, format = v => v, duration = 0.9 }) {
   const from = useRef(0);
   useEffect(() => {
     if (value == null || reduce || typeof value !== 'number') { setShown(value); return; }
-    const c = animate(from.current, value, { duration, ease: EASE, onUpdate: v => setShown(v) });
+    const c = animate(from.current, value, { duration, ease: EASE, onUpdate: v => setShown(v), onComplete: () => setShown(value) });
     from.current = value;
     return () => c.stop();
   }, [value, reduce, duration]);
