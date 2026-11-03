@@ -13,7 +13,7 @@ import { computeActions, factReport } from './actions.js';
 import { createReport, listReports, getReport, workflow, getProject } from './reports.js';
 import { optimiseView, saveProfile } from './optimise.js';
 import { reanalyzeProject } from './readings.js';
-import { startRun, resumeIfStalled, EST_PER_QUESTION, RUN_MODEL, runnableEngines, askOpenRouter } from './pipeline.js';
+import { startRun, resumeIfStalled, estPerAnswer, RUN_MODEL, runnableEngines, askOpenRouter } from './pipeline.js';
 import { runSiteCheck } from './sitecheck.js';
 import { prefillFromWebsite } from './prefill.js';
 import { outreachView, addTarget, updateTarget, draftEmail } from './outreach.js';
@@ -318,7 +318,7 @@ R('GET', '/projects/:id', async c => {
   return { ...p, fee: org?.fee ?? null, currency: org?.currency || 'EUR', brands: await M.brandsOf(p.id), workflow: await workflow(p.id),
     activeRun: await get("SELECT * FROM runs WHERE project_id = ? AND status IN ('running','waiting') ORDER BY id DESC LIMIT 1", p.id) || null,
     lastRun: await get('SELECT * FROM runs WHERE project_id = ? ORDER BY id DESC LIMIT 1', p.id) || null, promptCount,
-    budget: { monthly: Number(org?.monthly_budget || 0), spent: Number(org?.spent || 0), runEstimate: promptCount * EST_PER_QUESTION } };
+    budget: { monthly: Number(org?.monthly_budget || 0), spent: Number(org?.spent || 0), runEstimate: promptCount * runnableEngines(p.engines).reduce((s: number, e: string) => s + estPerAnswer(e), 0) } };
 });
 
 R('PATCH', '/projects/:id', async c => {
@@ -850,7 +850,7 @@ R('POST', '/settings/test/:engine', async c => {
   const t0 = Date.now();
   if (e.openrouter) {
     const model = (await siteSetting(e.modelSetting, null)) || e.defaultModel;
-    const r = await askOpenRouter(e.id, 'Reply with: Housedge connection OK', { model, web: false, maxTokens: 30 })
+    const r = await askOpenRouter(e.id, 'Reply with: Housedge connection OK', { model, web: false, maxTokens: 600 }) // Gemini thinks first; a tiny limit leaves no answer
       .catch((x: any) => { throw fail(String(x?.message || x).replaceAll(key, '[key]').slice(0, 300), 400); });
     await asService(() => run("INSERT INTO ai_spend (kind, model, cost, in_tokens, out_tokens) VALUES ('engine_test', ?, ?, ?, ?)", r.model, r.cost, r.inT, r.outT));
     return { ms: Date.now() - t0, model: r.model, text: r.text, citations: [] };

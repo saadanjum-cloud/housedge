@@ -29,7 +29,8 @@ export const ENGINES = {
     via: 'Anthropic API (Messages API) with the web search tool',
     secret: 'ANTHROPIC_API_KEY', keySetting: 'key_anthropic', modelSetting: 'model_anthropic', defaultModel: 'claude-opus-5-5',
     caveat: 'Same models as the Claude app, but without the app\'s own instructions and personalisation.',
-    price: { inPerM: 4.0, outPerM: 20.0, perSearch: 0.01, typicalIn: 12000, typicalOut: 1200, typicalSearches: 3 },
+    // Sonnet 5.5 (RUN_MODEL), measured Nov 2026: about $0.05 per answer, mostly ~15k tokens of search results.
+    price: { inPerM: 2.0, outPerM: 10.0, perSearch: 0.01, typicalIn: 15000, typicalOut: 1000, typicalSearches: 1 },
   },
   copilot: {
     id: 'copilot', label: 'Microsoft Copilot', supported: false, color: '#7f5af0',

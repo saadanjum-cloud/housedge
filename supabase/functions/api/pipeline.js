@@ -13,7 +13,7 @@ import { brandsOf, isoDay } from './metrics.js';
 import { autoReport } from './reports.js';
 import { lookalikeConfig, markConfusion } from './lookalike.js';
 import { assertCanSpend } from './spend.js';
-import { ENGINES } from './engines.js';
+import { ENGINES, estimateAnswerCost } from './engines.js';
 
 export const RUN_MODEL = 'claude-sonnet-5-5'; // "Run now" uses Sonnet live (decided Oct 2026, for cost)
 const READ_MODEL = 'claude-haiku-5-5';
@@ -23,8 +23,9 @@ const costOf = (model, u, searches = 0) => {
   const [i, o] = PRICES[model] || PRICES['claude-opus-5-5'];
   return ((u?.input_tokens || 0) * i + (u?.output_tokens || 0) * o) / 1e6 + searches * 0.01;
 };
-// Expected cost of one question (answer + reading), used to check the budget before a check starts.
-export const EST_PER_QUESTION = 0.09;
+// Expected cost of one answer on an engine (answer + reading, with a 25% margin), used to check the budget before
+// a check starts and before each answer. From the measured per-engine prices in engines.js.
+export const estPerAnswer = engine => estimateAnswerCost(engine) * 1.25 + 0.002;
 const PARALLEL = 6;
 const STALE_MS = 180_000; // longer than a function can live: no heartbeat for this long means the worker stopped
 const MAX_ANSWER_CHARS = 60_000;
@@ -66,6 +67,7 @@ export async function askOpenRouter(engine, question, { model, search = 'native'
       status = res.status; j = await res.json().catch(() => ({}));
     } catch (e) { j = { error: { message: e?.name === 'TimeoutError' ? 'no answer within 150 seconds' : String(e?.message || e) } }; }
     const msg = j.choices?.[0]?.message;
+    if (!j.error && msg && !String(msg.content || '').trim()) j.error = { message: 'returned an empty answer', code: 502 };
     if (!j.error && msg) {
       if (j.choices[0].finish_reason === 'content_filter') throw new Error(`${label} declined to answer this question (safety filter).`);
       const raw = (msg.annotations || []).filter(a => a.type === 'url_citation' && a.url_citation?.url).map(a => a.url_citation);
@@ -150,7 +152,8 @@ export async function startRun(project, userId, trigger = 'manual') {
   const prompts = await db(() => all('SELECT id FROM prompts WHERE project_id = ? AND active', project.id));
   if (!prompts.length) throw Object.assign(new Error('Add at least one question first.'), { expose: true });
   const total = prompts.length * engines.length; // one answer per question per engine
-  await assertCanSpend(project.org_id, total * EST_PER_QUESTION); // client budget, platform cap, trial cap
+  const est = prompts.length * engines.reduce((s, e) => s + estPerAnswer(e), 0);
+  await assertCanSpend(project.org_id, est); // client budget, platform cap, trial cap
   let runId;
   try {
     runId = (await db(() => get("INSERT INTO runs (project_id, trigger, status, total, requested_by, heartbeat_at) VALUES (?, ?, 'running', ?, ?, now()) RETURNING id",
@@ -199,7 +202,7 @@ async function processRun(runId) {
         const q = todo.shift();
         // Checked before every question, so a check stops as soon as any spending lock would be crossed
         // (also when several checks of one company run at the same time).
-        try { await db(() => assertCanSpend(r.org_id, EST_PER_QUESTION)); } catch (e) { stopped = e.message; break; }
+        try { await db(() => assertCanSpend(r.org_id, estPerAnswer(q.engine))); } catch (e) { stopped = e.message; break; }
         await answerOne(client, { runId, projectId, orgId: r.org_id, q, engine: q.engine, conf: conf[q.engine], day, brands, cfg });
         await db(() => run('UPDATE runs SET heartbeat_at = now() WHERE id = ?', runId));
       }
