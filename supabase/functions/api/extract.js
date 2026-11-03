@@ -115,6 +115,16 @@ export function resolve(entities, brands) {
   });
 }
 
+// Untracked entities worth suggesting as competitors. A shop that sells the products (an electronics chain,
+// Amazon) is where to buy, not a competitor, unless the answer describes the client as a shop too.
+// ponytail: when the client is a shop but not named in the answer, its rival shops are skipped for that answer.
+const SHOP = /\b(retailer|retail chain|reseller|stockist|department store|electronics store|online store|online shop)\b/i;
+export function suggestable(resolved, brands) {
+  const ownId = brands.find(b => b.is_own)?.id;
+  const ownIsShop = resolved.some(e => e.brand_id === ownId && SHOP.test(e.descriptor || ''));
+  return resolved.filter(e => !e.brand_id && e.kind !== 'other' && e.role !== 'passing' && (ownIsShop || !SHOP.test(e.descriptor || '')));
+}
+
 // The old exact-match reading of the client's own brand, kept only as an alarm: when it and the extractor
 // disagree about whether the client is named at all, the answer is flagged for a human look.
 export function crossCheck(text, brands, resolved) {

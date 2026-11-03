@@ -278,7 +278,7 @@ function FirstRun({ s, libPrompts, onDone }) {
           <tbody>
             {[...result.brands].sort((a, b) => (b.visibility || 0) - (a.visibility || 0)).map(b => (
               <tr key={b.id}><td className="td"><span className="flex items-center gap-2"><BrandDot slot={b.color} /><span className={b.is_own ? 'font-semibold' : ''}>{b.name}</span></span></td>
-                <td className="td tnum">{fmtPct(b.visibility)}</td><td className="td tnum">{fmtPos(b.position)}</td><td className="td"><Sentiment value={b.sentiment} /></td></tr>
+                <td className="td tnum">{fmtPct(b.visibility)}</td><td className="td tnum">{fmtPos(b.position, b.visibility > 0)}</td><td className="td"><Sentiment value={b.sentiment} /></td></tr>
             ))}
           </tbody>
         </table>

@@ -128,7 +128,8 @@ export async function sources(projectId, f, limit = 100) {
   return { totalAnswers: total, byType, domains: domains.map(d => ({ ...d, label: SOURCE_TYPES[d.category], share: total ? round(100 * d.answers / total) : 0 })), urls };
 }
 
-// Brands the answers name that are not tracked. Spellings merged; product lines of a tracked brand skipped.
+// Brands the answers name that are not tracked. Spellings merged; product lines of a tracked brand ("Oura Ring 4")
+// and short forms of one ("Galaxy Ring" for Samsung Galaxy Ring) skipped.
 export async function suggestions(projectId, f) {
   const af = answerFilter(projectId, f);
   const total = (await get(`SELECT COUNT(*) n FROM (${af.sql}) x`, ...af.params)).n;
@@ -137,7 +138,7 @@ export async function suggestions(projectId, f) {
   const groups = new Map();
   for (const r of await all(`SELECT name, answer_id FROM other_brands WHERE answer_id IN (${af.sql})`, ...af.params)) {
     const key = normName(r.name);
-    if (!key || tracked.some(t => key === t || key.startsWith(t + ' '))) continue;
+    if (!key || tracked.some(t => key === t || key.startsWith(t + ' ') || t.endsWith(' ' + key))) continue;
     const g = groups.get(key) || { answers: new Set(), names: new Map() };
     g.answers.add(r.answer_id);
     g.names.set(r.name, (g.names.get(r.name) || 0) + 1);

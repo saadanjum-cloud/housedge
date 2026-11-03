@@ -165,7 +165,8 @@ export function useFilters() {
 export const namesBrand = (text, brand) => !!brand && [brand.name, ...(brand.aliases || [])].filter(n => n && n.length > 1)
   .some(n => new RegExp(`(^|[^\\p{L}\\p{N}])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}\\p{N}])`, 'iu').test(text));
 export const fmtPct = v => (v == null ? '—' : `${Math.round(v * 10) / 10}%`);
-export const fmtPos = v => (v == null ? '—' : `#${(Math.round(v * 10) / 10).toFixed(1)}`);
+// Position counts only numbered lists: a brand named in prose has none (`named` says it was named).
+export const fmtPos = (v, named) => (v == null ? (named ? 'not in a list' : '—') : `#${Math.round(v * 10) / 10}`);
 export const fmtMoney = v => `$${(v || 0).toFixed(v < 10 ? 2 : 0)}`;
 export const fmtDate = d => (d ? new Date(d.length === 10 ? d + 'T12:00:00Z' : d.replace(' ', 'T') + (d.includes('Z') ? '' : 'Z'))
   .toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');

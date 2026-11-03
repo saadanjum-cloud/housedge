@@ -225,13 +225,13 @@ export function ReportView({ print }) {
             This report shows how {engines} {engines.includes(',') ? 'describe' : 'describes'} <strong>{own.name}</strong> to customers, compared with {s.brands.length - 1} competitor{s.brands.length - 1 === 1 ? '' : 's'}.
             {' '}<strong>{own.name}</strong> was mentioned in <strong>{fmtPct(own.visibility)}</strong> of AI answers, ranking <strong>#{own.rank} of {s.brands.length}</strong> tracked brands.
             {leader && <> The most visible competitor, <strong>{leader.name}</strong>, appeared in <strong>{fmtPct(leader.visibility)}</strong>.</>}
-            {' '}When {own.name} was mentioned, it was on average at position <strong>{fmtPos(own.position)}</strong>{own.sentiment == null ? <>; the answers did not use clearly positive or negative words about it, so tone could not be scored</> : <>, with a tone of <strong>{own.sentiment}/100</strong></>}.
+            {' '}{own.position == null ? <>When {own.name} was mentioned, it was never part of a numbered list, so it has no list position</> : <>When {own.name} appeared in a numbered list, it was on average at position <strong>{fmtPos(own.position)}</strong></>}{own.sentiment == null ? <>; the answers did not use clearly positive or negative words about it, so tone could not be scored</> : <>, with a tone of <strong>{own.sentiment}/100</strong></>}.
           </p>
 
           <table className="rp-keep mt-5 w-full border-y border-line">
             <tbody><tr className="divide-x divide-[color:var(--line)]">
               {[['Visibility', fmtPct(own.visibility), <Delta key="v" now={own.visibility} before={prevOf(own.id)?.visibility} />],
-                ['Average position', fmtPos(own.position), <Delta key="p" now={own.position} before={prevOf(own.id)?.position} invert unit="" />],
+                ['Average position', fmtPos(own.position, own.visibility > 0), <Delta key="p" now={own.position} before={prevOf(own.id)?.position} invert unit="" />],
                 ['Sentiment', own.sentiment == null ? 'n/a' : `${own.sentiment}/100`, <Delta key="s" now={own.sentiment} before={prevOf(own.id)?.sentiment} digits={0} />],
                 ['Share of voice', fmtPct(own.sov), <Delta key="o" now={own.sov} before={prevOf(own.id)?.sov} />]].map(([l, v, d]) => (
                 <td key={l} className="w-1/4 px-4 py-3 align-top first:pl-0">
@@ -266,7 +266,7 @@ export function ReportView({ print }) {
                   <td className="td pl-0 tnum text-muted">{b.rank}</td>
                   <td className="td"><span className="flex items-center gap-2"><BrandDot slot={b.color} /><span className={b.is_own ? 'font-semibold' : ''}>{b.name}</span></span></td>
                   <td className="td"><div className="flex items-center gap-2"><span className="tnum w-12">{fmtPct(b.visibility)}</span><Bar value={b.visibility} slot={b.color} /></div>{prev && <Delta now={b.visibility} before={prevOf(b.id)?.visibility} short />}</td>
-                  <td className="td tnum">{fmtPos(b.position)}</td><td className="td"><Sentiment value={b.sentiment} /></td><td className="td tnum">{fmtPct(b.sov)}</td>
+                  <td className="td tnum">{fmtPos(b.position, b.visibility > 0)}</td><td className="td"><Sentiment value={b.sentiment} /></td><td className="td tnum">{fmtPct(b.sov)}</td>
                 </tr>))}</tbody>
             </table>
           </div>

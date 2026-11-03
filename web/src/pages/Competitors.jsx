@@ -45,7 +45,7 @@ export default function Competitors() {
                           <div className="ml-4 text-xs text-muted">{full?.domain || 'no website set'}</div></td>
                         <td className="td text-xs text-ink2 max-w-[200px]">{full?.aliases?.join(', ') || <span className="text-muted">—</span>}</td>
                         <td className="td"><div className="flex items-center gap-2"><span className="tnum w-11">{fmtPct(b.visibility)}</span><Bar value={b.visibility} slot={b.color} /></div></td>
-                        <td className="td tnum">{fmtPos(b.position)}</td>
+                        <td className="td tnum">{fmtPos(b.position, b.visibility > 0)}</td>
                         <td className="td"><Sentiment value={b.sentiment} /></td>
                         <td className="td whitespace-nowrap text-right">
                           {!readOnly && <button className="btn-ghost btn-sm" onClick={() => setEdit(full)} aria-label={`Edit ${b.name}`}><Pencil size={13} /></button>}

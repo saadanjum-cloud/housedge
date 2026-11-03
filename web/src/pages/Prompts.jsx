@@ -82,7 +82,7 @@ export default function Prompts() {
                     </td>
                     <td className="td whitespace-nowrap text-xs">{COUNTRY_FLAGS[p.country]} {p.country}<div className="text-muted">{meta.languages[p.language] || p.language}</div></td>
                     <td className="td tnum">{fmtPct(p.visibility)}<div className="text-[11px] text-muted">{p.answers} answers</div></td>
-                    <td className="td tnum">{fmtPos(p.position)}</td>
+                    <td className="td tnum">{fmtPos(p.position, p.visibility > 0)}</td>
                     <td className="td"><Sentiment value={p.sentiment} /></td>
                     <td className="td text-xs">{p.topBrand ? <>{p.topBrand.name}<div className="text-muted tnum">{p.topBrand.visibility}%</div></> : '—'}</td>
                     <td className="td">{readOnly ? <span className="text-xs">{p.active ? 'Active' : 'Paused'}</span> : <button className="btn-ghost btn-sm" onClick={() => toggleOne(p)}>{p.active ? 'Active' : 'Paused'}</button>}</td>

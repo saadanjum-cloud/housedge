@@ -70,7 +70,7 @@ export default function Projects() {
             </div>
             <div className="mt-5 grid grid-cols-3 gap-2 rounded-xl bg-raised py-3 text-center">
               <div><div className="text-[11px] text-muted">Visibility</div><div className="tnum text-[19px] font-semibold tracking-title">{fmtPct(p.own?.visibility)}</div></div>
-              <div><div className="text-[11px] text-muted">Position</div><div className="tnum text-[19px] font-semibold tracking-title">{fmtPos(p.own?.position)}</div></div>
+              <div><div className="text-[11px] text-muted">Position</div><div className="tnum text-[19px] font-semibold tracking-title">{fmtPos(p.own?.position, p.own?.visibility > 0)}</div></div>
               <div><div className="text-[11px] text-muted">Sentiment</div><div className="text-[19px] font-semibold tracking-title"><Sentiment value={p.own?.sentiment} compact /></div></div>
             </div>
             <div className="mt-3 flex items-center justify-between text-xs text-muted">

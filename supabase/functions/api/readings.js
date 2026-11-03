@@ -4,7 +4,7 @@
 // pipeline rows), so callers must first confirm the person can see the project.
 import { all, run, parseJSON } from './db.js';
 import { analyzeAnswer, classifySource } from './analysis.js';
-import { resolve } from './extract.js';
+import { resolve, suggestable } from './extract.js';
 import { lookalikeConfig, confusedWith } from './lookalike.js';
 
 export const SENTIMENT_SCORE = { positive: 85, mixed: 50, neutral: null, negative: 15 };
@@ -35,10 +35,9 @@ export async function reanalyzeProject(projectId) {
     const from = mentions.length;
     const reading = parseJSON(a.reading, null);
     if (reading) {
-      for (const e of resolve(reading.entities || [], brands)) {
-        if (e.brand_id) mentions.push([a.id, e.brand_id, e.rank ?? null, SENTIMENT_SCORE[e.sentiment] ?? null, String(e.quote || '').slice(0, 400)]);
-        else if (e.kind !== 'other' && e.role !== 'passing') others.push([a.id, e.name]);
-      }
+      const resolved = resolve(reading.entities || [], brands);
+      for (const e of resolved) if (e.brand_id) mentions.push([a.id, e.brand_id, e.rank ?? null, SENTIMENT_SCORE[e.sentiment] ?? null, String(e.quote || '').slice(0, 400)]);
+      for (const e of suggestable(resolved, brands)) others.push([a.id, e.name]);
       checkConfusion(a, from);
       continue;
     }

@@ -2,6 +2,7 @@
 // (AI drafts move to the pipeline functions). Generators are unchanged.
 import { all, get, run, parseJSON } from './db.js';
 import { v, safeHttpUrl, InputError } from './validate.js';
+import { COUNTRIES } from './library.js';
 
 export const PROFILE_FIELDS = {
   name: { label: 'Brand name', max: 120 },
@@ -26,7 +27,9 @@ export async function readProfile(projectId) {
   const row = await get('SELECT data FROM brand_profiles WHERE project_id = ?', projectId);
   const own = await get('SELECT name, domain FROM brands WHERE project_id = ? AND is_own', projectId);
   const data = parseJSON(row?.data, {});
-  return { ...data, name: data.name || own?.name || '', website: own?.domain ? `https://${own.domain}` : '' };
+  // Markets default to the countries the project tracks, until the client writes their own.
+  const markets = data.markets || parseJSON((await get('SELECT countries FROM projects WHERE id = ?', projectId))?.countries, []).map(c => COUNTRIES[c] || c).join(', ');
+  return { ...data, name: data.name || own?.name || '', markets, website: own?.domain ? `https://${own.domain}` : '' };
 }
 
 export async function saveProfile(projectId, body) {

@@ -36,7 +36,7 @@ export default function Overview() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat i={0} label="Visibility" help="Share of AI answers that mention your brand at all." value={<CountUp value={own?.visibility} format={fmtPct} />}
           delta={<Delta now={own?.visibility} before={own?.prev?.visibility} />} sub={`of ${s.totalAnswers} answers`} />
-        <Stat i={1} label="Position" help="Average rank when you are mentioned. 1 = named first. Lower is better." value={<CountUp value={own?.position} format={fmtPos} />}
+        <Stat i={1} label="Position" help="Your average place when AI gives a numbered list of options (1 = first). Lower is better. Answers that name you in plain text have no place." value={<CountUp value={own?.position} format={fmtPos} />}
           delta={<Delta now={own?.position} before={own?.prev?.position} invert unit="" />} />
         <Stat i={2} label="Sentiment" help="Tone of the sentences that mention you: 0 = very negative, 50 = neutral, 100 = very positive." value={<CountUp value={own?.sentiment} format={v => <Sentiment value={v} />} />}
           delta={<Delta now={own?.sentiment} before={own?.prev?.sentiment} digits={0} />} />
@@ -148,11 +148,12 @@ function Trends({ daily, className }) {
 }
 
 // Rank of a brand on one metric among all tracked brands (1 = best), now and in the previous period.
+// Out of every tracked brand, so the ranks on different metrics compare; a brand with no value counts as last.
 function rankOf(brands, id, get, lowerBetter) {
   const vals = brands.map(b => ({ id: b.id, v: get(b) })).filter(x => x.v != null);
   if (!vals.some(x => x.id === id)) return null;
   vals.sort((a, b) => lowerBetter ? a.v - b.v : b.v - a.v);
-  return { rank: vals.findIndex(x => x.id === id) + 1, of: vals.length };
+  return { rank: vals.findIndex(x => x.id === id) + 1, of: brands.length };
 }
 
 // One-line status at the top of the overview, with the client's rank on each metric.
@@ -264,7 +265,7 @@ function EngineTable({ data, brands }) {
                 {data.map(e => {
                   const x = e.brands.find(y => y.id === b.id);
                   return <td key={e.engine} className="td"><div className="flex items-center gap-2"><span className="tnum w-11">{fmtPct(x?.visibility)}</span><Bar value={x?.visibility} slot={b.color} /></div>
-                    <div className="text-[11px] text-muted tnum">pos {fmtPos(x?.position)} · tone {x?.sentiment ?? '—'}</div></td>;
+                    <div className="text-[11px] text-muted tnum">{x?.position != null ? `pos ${fmtPos(x.position)}` : x?.visibility > 0 ? 'not in a list' : 'pos —'} · tone {x?.sentiment ?? '—'}</div></td>;
                 })}
               </tr>
             ))}

@@ -6,7 +6,7 @@ import Anthropic from 'npm:@anthropic-ai/sdk@0.133.0';
 import { asService, all, get, run } from './db.js';
 import { analyzeAnswer, classifySource, domainOf } from './analysis.js';
 import { safeHttpUrl } from './validate.js';
-import { SCHEMA, SYSTEM, EXTRACTOR_VERSION, verify, resolve, crossCheck } from './extract.js';
+import { SCHEMA, SYSTEM, EXTRACTOR_VERSION, verify, resolve, suggestable, crossCheck } from './extract.js';
 import { SENTIMENT_SCORE } from './readings.js';
 import { brandsOf, isoDay } from './metrics.js';
 import { autoReport } from './reports.js';
@@ -183,8 +183,8 @@ async function answerOne(client, { runId, projectId, orgId, q, day, brands, cfg 
       for (const e of resolved) {
         if (e.brand_id) await run('INSERT INTO mentions (project_id, answer_id, brand_id, position, sentiment, snippet) VALUES (?,?,?,?,?,?)',
           projectId, answerId, e.brand_id, e.rank, SENTIMENT_SCORE[e.sentiment], e.quote.slice(0, 400));
-        else if (e.kind !== 'other' && e.role !== 'passing') await run('INSERT INTO other_brands (project_id, answer_id, name) VALUES (?,?,?)', projectId, answerId, e.name);
       }
+      for (const e of suggestable(resolved, brands)) await run('INSERT INTO other_brands (project_id, answer_id, name) VALUES (?,?,?)', projectId, answerId, e.name);
       await markConfusion(cfg, { answerId, projectId, text: a.text, domains: a.citations.map(c => domainOf(c.url)).filter(Boolean), promptText: q.text, brands });
       await run(`INSERT INTO extractions (answer_id, project_id, version, model, data, dropped, disagreement, cost, in_tokens, out_tokens) VALUES (?,?,?,?,?::jsonb,?,?,?,?,?)
         ON CONFLICT (answer_id) DO NOTHING`, answerId, projectId, EXTRACTOR_VERSION, x.model,
