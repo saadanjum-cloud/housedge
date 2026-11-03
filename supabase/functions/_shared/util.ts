@@ -12,10 +12,12 @@ export class Fail extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
 
+// Any local dev server (any port) may call too: sign-in is by bearer token, not cookies, so a page cannot borrow a session.
+const LOCAL_DEV = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 function cors(req: Request): Record<string, string> {
   const origin = req.headers.get('origin') || '';
   return {
-    'Access-Control-Allow-Origin': ORIGINS.includes(origin) ? origin : ORIGINS[0],
+    'Access-Control-Allow-Origin': (ORIGINS.includes(origin) || LOCAL_DEV.test(origin)) ? origin : ORIGINS[0],
     'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info, x-region',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     Vary: 'Origin',
