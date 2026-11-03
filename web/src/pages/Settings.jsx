@@ -8,8 +8,9 @@ import { Card, PageHeader, Spinner, ErrorBox, Badge, Segmented, useToast, Modal,
 const TABS = [['engines', 'AI engines'], ['costs', 'Costs & limits'], ['team', 'Team'], ['api', 'API & exports'], ['company', 'Company & legal'], ['data', 'Mode & backups']];
 
 const KEY_HELP = {
-  chatgpt: { site: 'https://platform.openai.com/api-keys', steps: ['Go to platform.openai.com and sign up or log in.', 'Click Settings (gear) → Billing → add a payment card and buy $10 of credit.', 'Click API keys → "Create new secret key" → name it "Housedge" → Create.', 'Copy the key (starts with sk-) and paste it here. You can only see it once.'] },
-  gemini: { site: 'https://aistudio.google.com/apikey', steps: ['Go to aistudio.google.com and log in with a Google account.', 'Click "Get API key" → "Create API key" → pick or create a Google Cloud project.', 'To go beyond the free tier, click "Set up billing" next to the key and add a card.', 'Copy the key (starts with AIza) and paste it here.'] },
+  // ChatGPT and Gemini both run through one OpenRouter key.
+  chatgpt: { site: 'https://openrouter.ai/settings/keys', steps: ['Go to openrouter.ai and sign up or log in.', 'Open Settings → Credits and buy credit (e.g. $25).', 'Open Settings → API Keys → "Create key", name it "Housedge" and set a spending limit.', 'Copy the key (starts with sk-or-) and give it to your developer to set as the OPENROUTER_API_KEY secret in Supabase. ChatGPT and Gemini share this one key.'] },
+  gemini: { site: 'https://openrouter.ai/settings/keys', steps: ['Go to openrouter.ai and sign up or log in.', 'Open Settings → Credits and buy credit (e.g. $25).', 'Open Settings → API Keys → "Create key", name it "Housedge" and set a spending limit.', 'Copy the key (starts with sk-or-) and give it to your developer to set as the OPENROUTER_API_KEY secret in Supabase. ChatGPT and Gemini share this one key.'] },
   perplexity: { site: 'https://www.perplexity.ai/account/api', steps: ['Go to perplexity.ai, log in, then open Settings → API (perplexity.ai/account/api).', 'Add a payment method and buy credit (e.g. $10).', 'Click "Generate API key" (or "Create key").', 'Copy the key (starts with pplx-) and paste it here.'] },
   claude: { site: 'https://console.anthropic.com/settings/keys', steps: ['Go to console.anthropic.com and sign up or log in.', 'Open Settings → Billing and buy credit (e.g. $10).', 'Open Settings → API keys → "Create key", name it "Housedge".', 'Copy the key (starts with sk-ant-) and paste it here.'] },
 };
@@ -53,6 +54,19 @@ function Engines({ s, reload }) {
   );
 }
 
+// Where Gemini's web results come from. Google grounding is closest to the Gemini app, but Google's terms limit
+// storing and analysing grounded answers; OpenRouter's own search (Exa) avoids those terms and is less like the app.
+function GeminiSearch({ e, admin, reload }) {
+  const [busy, setBusy] = useState(false);
+  const set = async val => { setBusy(true); try { await api('/settings', { method: 'PATCH', body: { search_gemini: val } }); reload(); } finally { setBusy(false); } };
+  return (
+    <div className="text-xs text-muted">
+      <div className="mb-1">Web search for Gemini answers</div>
+      <Segmented value={e.search} onChange={val => admin && !busy && set(val)} size="sm" options={[{ value: 'native', label: 'Google Search (closest to the app)' }, { value: 'exa', label: 'OpenRouter search (avoids Google terms)' }]} />
+    </div>
+  );
+}
+
 function EngineCard({ e, reload }) {
   const user = useUser();
   const toast = useToast();
@@ -77,6 +91,7 @@ function EngineCard({ e, reload }) {
           <button className="ml-1 text-accent underline" onClick={() => setHelp(true)}>How do I get this key?</button>
         </div>
         <div className="text-xs text-muted">Model in use: <strong className="text-ink">{model}</strong></div>
+        {e.id === 'gemini' && <GeminiSearch e={e} admin={admin} reload={reload} />}
         <div className="text-xs text-muted">Estimated cost per answer: <strong className="text-ink">{fmtMoney(e.perAnswer)}</strong> (about {Math.round(1 / e.perAnswer)} answers per $1)</div>
         <div className="flex flex-wrap gap-2">
           {e.connected && <button className="btn-ghost btn-sm" disabled={!admin || busy} onClick={runTest}>{busy ? <Loader2 size={13} className="animate-spin" /> : null}Test (costs ~1 answer)</button>}

@@ -13,7 +13,7 @@ import { computeActions, factReport } from './actions.js';
 import { createReport, listReports, getReport, workflow, getProject } from './reports.js';
 import { optimiseView, saveProfile } from './optimise.js';
 import { reanalyzeProject } from './readings.js';
-import { startRun, resumeIfStalled, EST_PER_QUESTION, RUN_MODEL } from './pipeline.js';
+import { startRun, resumeIfStalled, EST_PER_QUESTION, RUN_MODEL, runnableEngines, askOpenRouter } from './pipeline.js';
 import { runSiteCheck } from './sitecheck.js';
 import { prefillFromWebsite } from './prefill.js';
 import { outreachView, addTarget, updateTarget, draftEmail } from './outreach.js';
@@ -408,13 +408,19 @@ R('GET', '/runs/:id', async c => {
   const r = await get('SELECT * FROM runs WHERE id = ?', v.id(c.params.id));
   if (!r) throw notFound();
   if (r.status === 'running') await resumeIfStalled(r.id);
-  const items = await all(`SELECT q.id, q.text, a.id answer_id, a.error, a.searches, x.answer_id IS NOT NULL AS read,
+  // One row per question per engine: the engines this check asks while it runs, the ones that answered once it is over.
+  const answered = (await all('SELECT DISTINCT engine FROM answers WHERE run_id = ?', r.id)).map((x: any) => x.engine);
+  const chosen = r.status === 'running' ? runnableEngines((await get('SELECT engines FROM projects WHERE id = ?', r.project_id))?.engines) : [];
+  const engines = [...new Set([...chosen, ...answered])];
+  const items = await all(`SELECT q.id, e.engine, q.text, a.id answer_id, a.error, a.searches, x.answer_id IS NOT NULL AS read,
       (SELECT COUNT(*) FROM citations s WHERE s.answer_id = a.id) sources,
       (SELECT COALESCE(json_agg(json_build_object('name', b.name, 'own', b.is_own, 'rank', m.position, 'sentiment', m.sentiment) ORDER BY b.is_own DESC, m.position NULLS LAST), '[]')
          FROM mentions m JOIN brands b ON b.id = m.brand_id WHERE m.answer_id = a.id) brands
-    FROM prompts q LEFT JOIN answers a ON a.prompt_id = q.id AND a.run_id = ? LEFT JOIN extractions x ON x.answer_id = a.id
-    WHERE q.project_id = ? AND (a.id IS NOT NULL OR (q.active AND q.created_at <= ?)) ORDER BY a.created_at NULLS LAST, q.id`, r.id, r.project_id, r.started_at);
-  return { ...r, items };
+    FROM prompts q CROSS JOIN unnest(string_to_array(?, ',')) AS e(engine)
+    LEFT JOIN answers a ON a.prompt_id = q.id AND a.run_id = ? AND a.engine = e.engine LEFT JOIN extractions x ON x.answer_id = a.id
+    WHERE q.project_id = ? AND (a.id IS NOT NULL OR (q.active AND q.created_at <= ?)) ORDER BY a.created_at NULLS LAST, q.id, e.engine`,
+    engines.join(','), r.id, r.project_id, r.started_at);
+  return { ...r, engines, items };
 });
 
 // ---------------------------------------------------------------- AI readiness: website check and fact check
@@ -788,7 +794,8 @@ async function settingsView(isAdmin: boolean) {
   for (const e of Object.values(ENGINES).filter((x: any) => x.supported) as any[]) {
     const key = Deno.env.get(e.secret);
     engines.push({ id: e.id, label: e.label, via: e.via, caveat: e.caveat, connected: !!key, keyHint: key && isAdmin ? `…${key.slice(-4)}` : null, fromEnv: !!key,
-      model: e.id === 'claude' ? RUN_MODEL : e.defaultModel, secret: isAdmin ? e.secret : null, defaultModel: e.defaultModel, price: { ...e.price, ...(prices[e.id] || {}) }, perAnswer: estimateAnswerCost(e.id, prices) });
+      model: e.id === 'claude' ? RUN_MODEL : (await siteSetting(e.modelSetting, null)) || e.defaultModel,
+      ...(e.id === 'gemini' ? { search: (await siteSetting('search_gemini', null)) === 'exa' ? 'exa' : 'native' } : {}), secret: isAdmin ? e.secret : null, defaultModel: e.defaultModel, price: { ...e.price, ...(prices[e.id] || {}) }, perAnswer: estimateAnswerCost(e.id, prices) });
   }
   const month = await get(`SELECT COALESCE((SELECT SUM(cost) FROM answers WHERE created_at >= date_trunc('month', now())), 0)
     + COALESCE((SELECT SUM(cost) FROM ai_spend WHERE created_at >= date_trunc('month', now())), 0) s`);
@@ -814,6 +821,7 @@ R('PATCH', '/settings', async c => {
   if (b.monthly_cap !== undefined) await setSetting('monthly_cap', v.num(b.monthly_cap, { min: 0, max: 100_000, label: 'Monthly cap' }) || 0);
   if (b.trial_daily_cap !== undefined) await setSetting('trial_daily_cap', v.num(b.trial_daily_cap, { min: 0, max: 10_000, label: 'Trial daily cap' }) || 0);
   if (b.run_hour_utc !== undefined) await setSetting('run_hour_utc', v.num(b.run_hour_utc, { min: 0, max: 23, integer: true, label: 'Run hour' }) || 0);
+  if (b.search_gemini !== undefined) await setSetting('search_gemini', b.search_gemini === 'exa' ? 'exa' : 'native');
   for (const e of Object.values(ENGINES).filter((x: any) => x.supported) as any[]) {
     if (b.keys?.[e.id]) throw new InputError('AI keys are now kept as server secrets, not in the app. Ask your developer to set them in Supabase.');
     const m = v.str(b.models?.[e.id], { max: 100, label: `${e.label} model` });
@@ -839,8 +847,14 @@ R('POST', '/settings/test/:engine', async c => {
   if (!e?.supported) throw notFound();
   const key = Deno.env.get(e.secret);
   if (!key) throw fail(`${e.label} is not connected. Set the ${e.secret} secret in Supabase.`, 400);
-  if (c.params.engine !== 'claude') throw fail(`${e.label} answers are being connected; the key is stored.`, 400);
   const t0 = Date.now();
+  if (e.openrouter) {
+    const model = (await siteSetting(e.modelSetting, null)) || e.defaultModel;
+    const r = await askOpenRouter(e.id, 'Reply with: Housedge connection OK', { model, web: false, maxTokens: 30 })
+      .catch((x: any) => { throw fail(String(x?.message || x).replaceAll(key, '[key]').slice(0, 300), 400); });
+    await asService(() => run("INSERT INTO ai_spend (kind, model, cost, in_tokens, out_tokens) VALUES ('engine_test', ?, ?, ?, ?)", r.model, r.cost, r.inT, r.outT));
+    return { ms: Date.now() - t0, model: r.model, text: r.text, citations: [] };
+  }
   const r = await new Anthropic({ apiKey: key, timeout: 30_000, maxRetries: 0 }).messages.create({ model: RUN_MODEL, max_tokens: 30, messages: [{ role: 'user', content: 'Reply with: Housedge connection OK' }] })
     .catch((x: any) => { throw fail(`Claude said: ${String(x?.message || x).replaceAll(key, '[key]')}`.slice(0, 300), 400); });
   await asService(() => run("INSERT INTO ai_spend (kind, model, cost, in_tokens, out_tokens) VALUES ('engine_test', ?, ?, ?, ?)", r.model, ((r.usage?.input_tokens || 0) * 2 + (r.usage?.output_tokens || 0) * 10) / 1e6, r.usage?.input_tokens || 0, r.usage?.output_tokens || 0));

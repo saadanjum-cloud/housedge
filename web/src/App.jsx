@@ -419,9 +419,15 @@ function FirstCheck({ project, onStart, readOnly }) {
 function Research({ run, project }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const meta = useMeta();
   const own = project.brands.find(b => b.is_own)?.name || project.name;
   const items = run?.items || [];
   const total = run?.total || project.promptCount;
+  const label = id => meta.engines?.find(e => e.id === id)?.label || id;
+  const color = id => meta.engines?.find(e => e.id === id)?.color || 'var(--muted)';
+  const engines = (run?.engines?.length ? run.engines : ['claude']).map(label);
+  const names = engines.length > 1 ? `${engines.slice(0, -1).join(', ')} and ${engines[engines.length - 1]}` : engines[0];
+  const questions = new Set(items.map(q => q.id)).size || project.promptCount;
   const finished = (run?.done || 0) + (run?.failed || 0);
   const secs = run ? Math.max(0, Math.round((now - new Date(run.started_at)) / 1000)) : 0;
   let asking = 0;
@@ -431,7 +437,7 @@ function Research({ run, project }) {
         <span className="shrink-0 animate-pulse"><Logo size={44} /></span>
         <div className="min-w-0">
           <h2 className="text-[20px] font-bold tracking-display md:text-[22px]">Researching what AI tells your customers about {own}</h2>
-          <p className="mt-1 max-w-3xl text-[14px] text-muted">Claude is searching the web and answering {total} questions the way a customer would ask them. Each answer is then read to find which brands it recommends, in what order, and why. This usually takes one to three minutes. You can leave this page; the check keeps going.</p>
+          <p className="mt-1 max-w-3xl text-[14px] text-muted">{names} {engines.length > 1 ? 'are' : 'is'} searching the web and answering {questions} questions the way a customer would ask them{engines.length > 1 ? ` (${total} answers)` : ''}. Each answer is then read to find which brands it recommends, in what order, and why. This usually takes one to three minutes. You can leave this page; the check keeps going.</p>
         </div>
       </div>
       <div className="mt-6 flex items-center gap-3">
@@ -442,28 +448,32 @@ function Research({ run, project }) {
         <span className="text-[13px] text-muted tnum">{Math.floor(secs / 60)}:{String(secs % 60).padStart(2, '0')}</span>
       </div>
       <ul className="mt-6 grid gap-1.5">
-        {(items.length ? items : Array.from({ length: total }, (_, i) => ({ id: i, text: '' }))).map(q => {
+        {(items.length ? items : Array.from({ length: total }, (_, i) => ({ id: i, text: '' }))).map((q, i) => {
           const state = !q.answer_id ? (asking++ < 6 ? 'asking' : 'waiting') : q.error ? 'failed' : q.read ? 'done' : 'reading';
           const me = (q.brands || []).find(x => x.own);
           const others = (q.brands || []).filter(x => !x.own).map(x => x.name);
           return (
-            <li key={q.id} className="flex items-start gap-3 rounded-xl px-3 py-2.5" style={{ background: state === 'done' ? 'var(--fill)' : 'transparent' }}>
+            <li key={`${q.id}-${q.engine || i}`} className="flex items-start gap-3 rounded-xl px-3 py-2.5" style={{ background: state === 'done' ? 'var(--fill)' : 'transparent' }}>
               <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center">
                 {state === 'done' ? <span className="grid h-5 w-5 place-items-center rounded-full bg-accent text-white"><Check size={12} /></span>
                   : state === 'failed' ? <X size={15} className="text-bad" />
                     : state === 'waiting' ? <span className="h-2 w-2 rounded-full bg-line" /> : <Loader2 size={15} className="animate-spin text-accent" />}
               </span>
               <div className="min-w-0 flex-1">
-                <div className={`text-[14px] ${state === 'waiting' ? 'text-muted' : 'font-medium'}`}>{q.text || <span className="skeleton inline-block h-3 w-64 align-middle" />}</div>
+                <div className={`flex flex-wrap items-center gap-x-2 text-[14px] ${state === 'waiting' ? 'text-muted' : 'font-medium'}`}>
+                  {q.engine && <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-fill px-2 py-0.5 text-[11.5px] font-semibold text-ink2">
+                    <span className="h-2 w-2 rounded-full" style={{ background: color(q.engine) }} />{label(q.engine)}</span>}
+                  {q.text || <span className="skeleton inline-block h-3 w-64 align-middle" />}
+                </div>
                 <div className="mt-0.5 text-[12px] text-muted">
-                  {state === 'asking' && 'Asking Claude and searching the web…'}
+                  {state === 'asking' && `Asking ${label(q.engine || 'claude')} and searching the web…`}
                   {state === 'waiting' && 'Waiting'}
                   {state === 'reading' && 'Answered. Reading which brands it names…'}
                   {state === 'failed' && 'Could not be answered this time.'}
                   {state === 'done' && <>
                     <span className={me ? 'font-semibold text-ink' : ''}>{me ? `${own} mentioned${me.rank ? ` · #${me.rank}` : ''}` : `${own} not mentioned`}</span>
                     {others.length > 0 && <> · also {others.slice(0, 4).join(', ')}{others.length > 4 ? ` +${others.length - 4}` : ''}</>}
-                    {' '}· {q.searches || 0} searches · {q.sources || 0} sources
+                    {' '}·{q.searches != null ? ` ${q.searches} searches ·` : ''} {q.sources || 0} sources
                   </>}
                 </div>
               </div>

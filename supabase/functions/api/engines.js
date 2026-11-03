@@ -3,17 +3,19 @@
 export const ENGINES = {
   chatgpt: {
     id: 'chatgpt', label: 'ChatGPT', supported: true, color: '#10a37f',
-    via: 'OpenAI API (Responses API) with the web search tool',
-    secret: 'OPENAI_API_KEY', keySetting: 'key_openai', modelSetting: 'model_openai', defaultModel: 'gpt-5-mini',
+    via: 'OpenAI models through OpenRouter, with OpenAI\'s own web search',
+    secret: 'OPENROUTER_API_KEY', keySetting: 'key_openai', modelSetting: 'model_openai', defaultModel: 'openai/gpt-6-luna', openrouter: true,
     caveat: 'Same company and model family as ChatGPT, but not the exact ChatGPT app: the app adds its own instructions, memory and personalisation.',
-    price: { inPerM: 0.25, outPerM: 2.0, perSearch: 0.01, typicalIn: 3000, typicalOut: 900, typicalSearches: 1 },
+    // Measured Nov 2026: about $0.045-0.055 per answer (OpenAI pulls ~40k tokens of search results and searches ~3-4 times).
+    price: { inPerM: 0.10, outPerM: 0.50, perSearch: 0.01, typicalIn: 40000, typicalOut: 2000, typicalSearches: 4 },
   },
   gemini: {
     id: 'gemini', label: 'Gemini', supported: true, color: '#4285f4',
-    via: 'Gemini API with "Grounding with Google Search"',
-    secret: 'GEMINI_API_KEY', keySetting: 'key_gemini', modelSetting: 'model_gemini', defaultModel: 'gemini-flash-latest',
+    via: 'Gemini models through OpenRouter, grounded with Google Search',
+    secret: 'OPENROUTER_API_KEY', keySetting: 'key_gemini', modelSetting: 'model_gemini', defaultModel: 'google/gemini-3.8-flash', openrouter: true,
     caveat: 'Same model family as the Gemini app, grounded with Google Search. It is NOT Google AI Mode or AI Overviews.',
-    price: { inPerM: 0.30, outPerM: 2.5, perSearch: 0.014, typicalIn: 1500, typicalOut: 900, typicalSearches: 1.5 },
+    // Measured Nov 2026: about $0.04-0.055 per answer, nearly all of it Google's search fee (~3-4 searches at $0.014).
+    price: { inPerM: 0.83, outPerM: 4.13, perSearch: 0.014, typicalIn: 100, typicalOut: 3000, typicalSearches: 3 },
   },
   perplexity: {
     id: 'perplexity', label: 'Perplexity', supported: true, color: '#20808d',

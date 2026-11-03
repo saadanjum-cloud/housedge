@@ -1,7 +1,8 @@
-// "Run now" on Supabase: asks Claude each active question with live web search (as a customer would), stores the
-// answer, then the AI reader (Haiku) lists the brands it names with verbatim evidence (see extract.js).
+// "Run now" on Supabase: asks each active question on every connected AI engine with live web search (as a customer
+// would): Claude directly, ChatGPT and Gemini through OpenRouter. Each answer is stored, then the AI reader (Haiku)
+// lists the brands it names with verbatim evidence (see extract.js).
 // It runs in the background after the request returns. Every write is its own short transaction, so the progress
-// screen sees each answer the moment it lands. ChatGPT, Gemini and Perplexity follow once their keys are connected.
+// screen sees each answer the moment it lands.
 import Anthropic from 'npm:@anthropic-ai/sdk@0.133.0';
 import { asService, all, get, run, detached } from './db.js';
 import { analyzeAnswer, classifySource, domainOf } from './analysis.js';
@@ -12,6 +13,7 @@ import { brandsOf, isoDay } from './metrics.js';
 import { autoReport } from './reports.js';
 import { lookalikeConfig, markConfusion } from './lookalike.js';
 import { assertCanSpend } from './spend.js';
+import { ENGINES } from './engines.js';
 
 export const RUN_MODEL = 'claude-sonnet-5-5'; // "Run now" uses Sonnet live (decided Oct 2026, for cost)
 const READ_MODEL = 'claude-haiku-5-5';
@@ -29,8 +31,63 @@ const MAX_ANSWER_CHARS = 60_000;
 const COUNTRY_CODE = { FI: 'FI', SE: 'SE', UK: 'GB', DE: 'DE', US: 'US', PK: 'PK', IN: 'IN', NG: 'NG', PH: 'PH', AE: 'AE' };
 
 const apiKey = () => Deno.env.get('ANTHROPIC_API_KEY');
+const orKey = () => Deno.env.get('OPENROUTER_API_KEY');
 const db = fn => asService(fn); // each call: its own transaction, committed straight away
-const clean = e => String(e?.message || e).replaceAll(apiKey() || '\u0000', '[key]').slice(0, 500);
+const clean = e => String(e?.message || e).replaceAll(apiKey() || '\u0000', '[key]').replaceAll(orKey() || '\u0000', '[key]').slice(0, 500);
+
+// Engines this server can ask now: chosen for the project, implemented here, and with a key.
+const IMPLEMENTED = ['chatgpt', 'gemini', 'claude'];
+export const runnableEngines = chosen => IMPLEMENTED.filter(e => (chosen || []).includes(e) && Deno.env.get(ENGINES[e].secret));
+const setting = async k => (await db(() => get('SELECT value FROM settings WHERE key = ?', k)))?.value ?? null;
+// Per engine: the model (Settings can override it) and, for Gemini, where search comes from:
+// 'native' = Google Search grounding (closest to the Gemini app), 'exa' = OpenRouter's own search (avoids Google's grounding terms).
+async function engineConfig(engine) {
+  if (engine === 'claude') return { model: RUN_MODEL };
+  const model = (await setting(ENGINES[engine].modelSetting)) || ENGINES[engine].defaultModel;
+  const search = engine === 'gemini' && (await setting('search_gemini')) === 'exa' ? 'exa' : 'native';
+  return { model, search };
+}
+
+// ChatGPT and Gemini through OpenRouter's chat API with the web plugin. Cost is OpenRouter's own figure.
+// ponytail: no location hint (OpenRouter has no portable one); market questions already name the country.
+const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const RETRY = new Set([408, 429, 500, 502, 503, 504]);
+export async function askOpenRouter(engine, question, { model, search = 'native', maxTokens = 8000, web = true }) {
+  const label = ENGINES[engine].label;
+  for (let attempt = 0; ; attempt++) {
+    let status = 0, j = {};
+    try {
+      const res = await fetch(OR_URL, {
+        method: 'POST', signal: AbortSignal.timeout(150_000),
+        headers: { Authorization: `Bearer ${orKey()}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://www.housedge.eu', 'X-Title': 'Housedge' },
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: question }], max_tokens: maxTokens, usage: { include: true },
+          ...(web ? { plugins: [{ id: 'web', engine: search, max_results: 8 }] } : {}) }),
+      });
+      status = res.status; j = await res.json().catch(() => ({}));
+    } catch (e) { j = { error: { message: e?.name === 'TimeoutError' ? 'no answer within 150 seconds' : String(e?.message || e) } }; }
+    const msg = j.choices?.[0]?.message;
+    if (!j.error && msg) {
+      if (j.choices[0].finish_reason === 'content_filter') throw new Error(`${label} declined to answer this question (safety filter).`);
+      const raw = (msg.annotations || []).filter(a => a.type === 'url_citation' && a.url_citation?.url).map(a => a.url_citation);
+      const seen = new Set();
+      const citations = (await Promise.all(raw.map(realUrl))).filter(c => c && !seen.has(c.url) && seen.add(c.url));
+      const u = j.usage || {};
+      return { text: String(msg.content || '').slice(0, MAX_ANSWER_CHARS), citations, model: j.model || model, searches: u.server_tool_use?.web_search_requests ?? null,
+        cost: Number(u.cost) || 0, inT: u.prompt_tokens || 0, outT: u.completion_tokens || 0 };
+    }
+    const code = Number(j.error?.code) || status;
+    if (attempt >= 2 || (status && !RETRY.has(code) && !RETRY.has(status))) throw new Error(`${label} (OpenRouter) said: ${j.error?.message || `error ${status}`}`);
+    await new Promise(r => setTimeout(r, 5000 * (attempt + 1))); // Google often answers "too many requests"; a short wait fixes it
+  }
+}
+
+// Gemini cites through Google redirect links; follow each to the real page (the title holds the site name as a fallback).
+async function realUrl(c) {
+  if (!/^https:\/\/vertexaisearch\.cloud\.google\.com\//.test(c.url)) return { url: c.url, title: c.title };
+  const to = await fetch(c.url, { redirect: 'manual', signal: AbortSignal.timeout(5000) }).then(r => r.headers.get('location')).catch(() => null);
+  if (to && safeHttpUrl(to)) return { url: to, title: c.title };
+  return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(c.title || '') ? { url: `https://${c.title}`, title: c.title } : null;
+}
 
 // Countries Claude's web search does not accept as a location (it answers 400). Their questions are asked
 // without the location hint; market questions already name the country in the text ("…in Pakistan").
@@ -88,14 +145,16 @@ export async function startRun(project, userId, trigger = 'manual') {
   const active = await db(() => get("SELECT id FROM runs WHERE project_id = ? AND status = 'running'", project.id));
   if (active) return { runId: active.id, already: true };
   if (!apiKey()) throw Object.assign(new Error('AI checks are not connected yet. Please contact the Housedge team.'), { expose: true, status: 503 });
-  if (!project.engines.includes('claude')) throw Object.assign(new Error('Choose Claude under Project settings → AI assistants first. (ChatGPT, Gemini and Perplexity are being connected.)'), { expose: true });
+  const engines = runnableEngines(project.engines);
+  if (!engines.length) throw Object.assign(new Error('Choose at least one AI engine under Project settings → AI engines first (ChatGPT, Gemini or Claude).'), { expose: true });
   const prompts = await db(() => all('SELECT id FROM prompts WHERE project_id = ? AND active', project.id));
   if (!prompts.length) throw Object.assign(new Error('Add at least one question first.'), { expose: true });
-  await assertCanSpend(project.org_id, prompts.length * EST_PER_QUESTION); // client budget, platform cap, trial cap
+  const total = prompts.length * engines.length; // one answer per question per engine
+  await assertCanSpend(project.org_id, total * EST_PER_QUESTION); // client budget, platform cap, trial cap
   let runId;
   try {
     runId = (await db(() => get("INSERT INTO runs (project_id, trigger, status, total, requested_by, heartbeat_at) VALUES (?, ?, 'running', ?, ?, now()) RETURNING id",
-      project.id, trigger, prompts.length, userId))).id;
+      project.id, trigger, total, userId))).id;
   } catch (e) {
     // Two clicks at the same moment: the database allows one running check per project (runs_one_running).
     if (e?.code !== '23505') throw e;
@@ -121,13 +180,18 @@ function inBackground(start) {
 async function processRun(runId) {
   const client = new Anthropic({ apiKey: apiKey(), timeout: 120_000, maxRetries: 1 });
   try {
-    const r = await db(() => get('SELECT r.*, p.org_id FROM runs r JOIN projects p ON p.id = r.project_id WHERE r.id = ?', runId));
+    const r = await db(() => get('SELECT r.*, p.org_id, p.engines FROM runs r JOIN projects p ON p.id = r.project_id WHERE r.id = ?', runId));
     const projectId = r.project_id;
     const brands = await db(() => brandsOf(projectId));
     const cfg = await db(() => lookalikeConfig(projectId));
-    // Questions not yet answered in this check (so a resumed worker skips what is done).
-    const todo = await db(() => all(`SELECT q.id, q.text, q.country FROM prompts q WHERE q.project_id = ? AND q.active AND q.created_at <= ?
-      AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.run_id = ? AND a.prompt_id = q.id) ORDER BY q.id`, projectId, r.started_at, runId));
+    const engines = runnableEngines(r.engines);
+    const conf = Object.fromEntries(await Promise.all(engines.map(async e => [e, await engineConfig(e)])));
+    // (question, engine) pairs not yet answered in this check, so a resumed worker skips what is done.
+    // Questions first, engines next to each other, so each question's answers arrive together on the progress screen.
+    const todo = await db(() => all(`SELECT q.id, q.text, q.country, e.engine FROM prompts q CROSS JOIN unnest(string_to_array(?, ',')) AS e(engine)
+      WHERE q.project_id = ? AND q.active AND q.created_at <= ?
+      AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.run_id = ? AND a.prompt_id = q.id AND a.engine = e.engine) ORDER BY q.id, e.engine`,
+      engines.join(','), projectId, r.started_at, runId));
     const day = isoDay(Date.now());
     let stopped = null;
     const worker = async () => {
@@ -136,7 +200,7 @@ async function processRun(runId) {
         // Checked before every question, so a check stops as soon as any spending lock would be crossed
         // (also when several checks of one company run at the same time).
         try { await db(() => assertCanSpend(r.org_id, EST_PER_QUESTION)); } catch (e) { stopped = e.message; break; }
-        await answerOne(client, { runId, projectId, orgId: r.org_id, q, day, brands, cfg });
+        await answerOne(client, { runId, projectId, orgId: r.org_id, q, engine: q.engine, conf: conf[q.engine], day, brands, cfg });
         await db(() => run('UPDATE runs SET heartbeat_at = now() WHERE id = ?', runId));
       }
     };
@@ -148,19 +212,19 @@ async function processRun(runId) {
   }
 }
 
-async function answerOne(client, { runId, projectId, orgId, q, day, brands, cfg }) {
+async function answerOne(client, { runId, projectId, orgId, q, engine, conf, day, brands, cfg }) {
   let a;
   try {
-    a = await askClaude(client, q.text, q.country);
+    a = engine === 'claude' ? await askClaude(client, q.text, q.country) : await askOpenRouter(engine, q.text, conf);
   } catch (e) {
-    await db(() => run(`INSERT INTO answers (run_id, project_id, prompt_id, engine, day, model, error) VALUES (?,?,?,'claude',?,?,?)`, runId, projectId, q.id, day, RUN_MODEL, clean(e)));
+    await db(() => run(`INSERT INTO answers (run_id, project_id, prompt_id, engine, day, model, error) VALUES (?,?,?,?,?,?,?)`, runId, projectId, q.id, engine, day, conf.model, clean(e)));
     await db(() => run('UPDATE runs SET failed = failed + 1 WHERE id = ?', runId));
     return;
   }
   // Store the answer with the quick word-match reading first, so it shows up at once.
   const answerId = await db(async () => {
     const id = (await get(`INSERT INTO answers (run_id, project_id, prompt_id, engine, day, text, model, cost, in_tokens, out_tokens, searches)
-      VALUES (?,?,?,'claude',?,?,?,?,?,?,?) RETURNING id`, runId, projectId, q.id, day, a.text, a.model, a.cost, a.inT, a.outT, a.searches)).id;
+      VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING id`, runId, projectId, q.id, engine, day, a.text, a.model, a.cost, a.inT, a.outT, a.searches)).id;
     const { mentions, others } = analyzeAnswer(a.text, brands);
     for (const m of mentions) await run('INSERT INTO mentions (project_id, answer_id, brand_id, position, sentiment, snippet) VALUES (?,?,?,?,?,?)', projectId, id, m.brand_id, m.position, m.sentiment, m.snippet);
     for (const o of others) await run('INSERT INTO other_brands (project_id, answer_id, name) VALUES (?,?,?)', projectId, id, o);
@@ -208,10 +272,10 @@ async function finish(runId, projectId, stopped = null) {
     if (r.done) { try { await db(() => autoReport(projectId)); } catch (e) { console.error('[report]', clean(e)); } }
     return;
   }
-  const top = r.failed ? await db(() => get('SELECT error, COUNT(*) n FROM answers WHERE run_id = ? AND error IS NOT NULL GROUP BY error ORDER BY n DESC LIMIT 1', runId)) : null;
+  const top = r.failed ? await db(() => get('SELECT engine, error, COUNT(*) n FROM answers WHERE run_id = ? AND error IS NOT NULL GROUP BY engine, error ORDER BY n DESC LIMIT 1', runId)) : null;
   const status = !r.done ? 'failed' : r.failed ? 'partial' : 'done';
   await db(() => run("UPDATE runs SET status = ?, message = ?, finished_at = now() WHERE id = ? AND status = 'running'",
-    status, r.failed ? `${r.failed} of ${r.total} questions failed (Claude said: ${readable(top?.error)}). Run the check again to retry them. ChatGPT, Gemini and Perplexity are being connected; this check used Claude.` : null, runId));
+    status, r.failed ? `${r.failed} of ${r.total} answers failed (most often ${ENGINES[top?.engine]?.label || 'an engine'}: ${readable(top?.error).replace(/^\w+ \(OpenRouter\) said: /, '')}). Run the check again to retry them.` : null, runId));
   await db(() => run('UPDATE projects SET last_run_at = now() WHERE id = ?', projectId));
   if (r.done) { try { await db(() => autoReport(projectId)); } catch (e) { console.error('[report]', clean(e)); } }
 }
