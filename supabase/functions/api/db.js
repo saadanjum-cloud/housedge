@@ -56,6 +56,10 @@ export function asUser(user, fn) {
     return fn(r.role || null);
   });
 }
+// Work that continues after the response (a check running in the background) must not inherit the request's
+// transaction: it closes when the response is sent. Started through this, every query opens its own.
+export const detached = fn => als.run(undefined, fn); // not als.exit: in Deno, exit still leaks the store into timers and later awaits
+
 export async function asService(fn) {
   const s = als.getStore();
   if (!s?.open) return inTx(null, fn);

@@ -3,7 +3,7 @@
 // It runs in the background after the request returns. Every write is its own short transaction, so the progress
 // screen sees each answer the moment it lands. ChatGPT, Gemini and Perplexity follow once their keys are connected.
 import Anthropic from 'npm:@anthropic-ai/sdk@0.133.0';
-import { asService, all, get, run } from './db.js';
+import { asService, all, get, run, detached } from './db.js';
 import { analyzeAnswer, classifySource, domainOf } from './analysis.js';
 import { safeHttpUrl } from './validate.js';
 import { SCHEMA, SYSTEM, EXTRACTOR_VERSION, verify, resolve, suggestable, crossCheck } from './extract.js';
@@ -101,7 +101,7 @@ export async function startRun(project, userId, trigger = 'manual') {
     if (e?.code !== '23505') throw e;
     return { runId: (await db(() => get("SELECT id FROM runs WHERE project_id = ? AND status = 'running'", project.id))).id, already: true };
   }
-  inBackground(processRun(runId));
+  inBackground(() => processRun(runId));
   return { runId };
 }
 
@@ -109,10 +109,11 @@ export async function startRun(project, userId, trigger = 'manual') {
 export async function resumeIfStalled(runId) {
   const claimed = await db(() => get(`UPDATE runs SET heartbeat_at = now() WHERE id = ? AND status = 'running'
     AND (heartbeat_at IS NULL OR heartbeat_at < now() - make_interval(secs => ?)) RETURNING id`, runId, STALE_MS / 1000));
-  if (claimed) inBackground(processRun(runId));
+  if (claimed) inBackground(() => processRun(runId));
 }
 
-function inBackground(promise) {
+function inBackground(start) {
+  const promise = detached(start); // its own transactions, never the request's (closed once the response is sent)
   // @ts-ignore EdgeRuntime is provided by Supabase: keeps the function alive after the response until this finishes.
   if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(promise); else promise.catch(() => {});
 }
@@ -134,7 +135,7 @@ async function processRun(runId) {
         const q = todo.shift();
         // Checked before every question, so a check stops as soon as any spending lock would be crossed
         // (also when several checks of one company run at the same time).
-        try { await assertCanSpend(r.org_id, EST_PER_QUESTION); } catch (e) { stopped = e.message; break; }
+        try { await db(() => assertCanSpend(r.org_id, EST_PER_QUESTION)); } catch (e) { stopped = e.message; break; }
         await answerOne(client, { runId, projectId, orgId: r.org_id, q, day, brands, cfg });
         await db(() => run('UPDATE runs SET heartbeat_at = now() WHERE id = ?', runId));
       }
