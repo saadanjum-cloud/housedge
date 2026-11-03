@@ -16,6 +16,7 @@ const PER_HOUR = 60;   // questions per client per hour
 const MAX_ROUNDS = 8;  // tool calls per question
 const MAX_MESSAGES = 12;       // conversation turns kept
 const MAX_MESSAGE_CHARS = 2000;
+const MAX_REPLY_CHARS = 8000; // earlier replies sent back as context
 const fail = msg => Object.assign(new Error(msg), { status: 400, expose: true });
 
 // The MCP tools as Claude tools: project_id is fixed, so it leaves the schema; list_projects is pointless here.
@@ -50,7 +51,9 @@ const TITLE = Object.fromEntries(TOOLS.map(t => [t.name, t.title]));
 export async function askHousedge(project, user, role, rawMessages, { apiKey, dispatch, emit = () => {} }) {
   const messages = (v.list(rawMessages, { max: 50, label: 'Messages' }) || []).slice(-MAX_MESSAGES).map(m => {
     if (!m || !['user', 'assistant'].includes(m.role)) throw new InputError('Invalid message.');
-    return { role: m.role, content: v.str(m.content, { max: MAX_MESSAGE_CHARS, label: 'Message', required: true }) };
+    // Only what the person types has a limit; Ask Housedge's own earlier replies are often longer, so they are shortened.
+    if (m.role === 'assistant') return { role: 'assistant', content: String(m.content ?? '').slice(0, MAX_REPLY_CHARS) || '…' };
+    return { role: 'user', content: v.str(m.content, { max: MAX_MESSAGE_CHARS, label: 'Message', required: true }) };
   });
   while (messages.length && messages[0].role !== 'user') messages.shift();
   if (!messages.length || messages[messages.length - 1].role !== 'user') throw new InputError('Ask a question first.');
