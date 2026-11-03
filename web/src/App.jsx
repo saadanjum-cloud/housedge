@@ -36,7 +36,7 @@ const Optimise = lazy(() => import('./pages/Optimise.jsx'));
 const WorkLog = lazy(() => import('./pages/WorkLog.jsx'));
 const Account = lazy(() => import('./pages/Account.jsx'));
 const Outreach = lazy(() => import('./pages/Outreach.jsx'));
-const Assistant = lazy(() => import('./Assistant.jsx'));
+const Ask = lazy(() => import('./pages/Ask.jsx'));
 
 
 // No saved sign-in in this browser: the visitor cannot be signed in, so the public pages render at once instead of
@@ -122,6 +122,7 @@ function Authed({ user, bare, children }) {
                 <Route path="competitors" element={<Competitors />} />
                 <Route path="sources" element={<Sources />} />
                 <Route path="chats" element={<Chats />} />
+                <Route path="ask" element={<Ask />} />
                 <Route path="actions" element={<Actions />} />
                 <Route path="work" element={<WorkLog />} />
                 <Route path="outreach" element={<Outreach />} />
@@ -186,9 +187,8 @@ function Shell({ user }) {
     { group: 'General', items: [
       { to: `/p/${pid}/overview`, label: 'Overview', icon: LayoutDashboard },
       { to: `/p/${pid}/journey`, label: 'Client journey', icon: RouteIcon },
+      { to: `/p/${pid}/ask`, label: 'Ask Housedge', icon: BotMessageSquare },
       { to: `/p/${pid}/chats`, label: 'Chats', icon: MessageSquareText },
-      // The agent chat: a panel, not a page (the Assistant component listens for this event).
-      { onClick: () => { setOpen(false); window.dispatchEvent(new Event('housedge:ask')); }, label: 'Ask Housedge', icon: BotMessageSquare },
     ] },
     { group: 'Analyse', items: [
       { to: `/p/${pid}/prompts`, label: 'Questions', icon: ListChecks },
@@ -268,8 +268,7 @@ function Shell({ user }) {
 }
 
 // Menu item; the grey highlight slides to the page you open.
-function NavItem({ to, icon: Icon, label, end, count, onClick }) {
-  if (!to) return <button type="button" onClick={onClick} className="navlink w-full text-left"><Icon size={15} /><span>{label}</span></button>;
+function NavItem({ to, icon: Icon, label, end, count }) {
   return (
     <NavLink to={to} end={end} className="navlink relative">
       {({ isActive }) => <>
@@ -322,6 +321,11 @@ function ProjectLayout() {
     catch (e) { setErr(e.message); }
   };
   const running = !!runId;
+  if (loc.pathname.endsWith('/ask')) return (
+    <ProjectCtx.Provider value={{ project, reload: () => { p.reload(); setVersion(v => v + 1); }, refreshHeader: p.reload, version, running, readOnly }}>
+      <Suspense fallback={<Spinner />}><Outlet /></Suspense>
+    </ProjectCtx.Provider>
+  );
 
   return (
     <ProjectCtx.Provider value={{ project, reload: () => { p.reload(); setVersion(v => v + 1); }, refreshHeader: p.reload, version, running, readOnly }}>
@@ -364,7 +368,6 @@ function ProjectLayout() {
       {running ? <Research run={runState} project={project} />
         : !project.last_run_at && loc.pathname.endsWith('/overview') ? <FirstCheck project={project} onStart={runNow} readOnly={readOnly} />
           : <PageIn key={`${loc.pathname}-${version}`}><Suspense fallback={<Spinner />}><Outlet /></Suspense></PageIn>}
-      <Suspense fallback={null}><Assistant project={project} /></Suspense>
     </ProjectCtx.Provider>
   );
 }
