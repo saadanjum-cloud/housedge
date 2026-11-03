@@ -10,6 +10,7 @@ export default function Competitors() {
   const { qs } = useFilters();
   const sum = useApi(`/projects/${project.id}/summary?${qs}`);
   const sugg = useApi(`/projects/${project.id}/suggestions?${qs}`);
+  const perc = useApi(`/projects/${project.id}/perception?${qs}`);
   const toast = useToast();
   const [edit, setEdit] = useState(null);
   const [adding, setAdding] = useState(false);
@@ -76,6 +77,7 @@ export default function Competitors() {
           )}
         </Card>
       </div>
+      <Perception data={perc.data} />
       <BrandModal brand={edit} open={!!edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); reload(); }} />
       <BrandModal open={adding} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); reload(); }} />
       <Modal open={!!del} onClose={() => setDel(null)} title={`Stop tracking ${del?.name}?`}>
@@ -113,5 +115,26 @@ function BrandModal({ brand, open, onClose, onSaved }) {
       </div>
       <div className="mt-5 flex justify-end gap-2"><button className="btn-ghost" onClick={close}>Cancel</button><button className="btn-primary" onClick={save}>Save</button></div>
     </Modal>
+  );
+}
+
+// What the answers praise and criticise about each brand: the reasons behind the numbers above.
+function Perception({ data }) {
+  const rows = (data || []).filter(b => b.praised.length || b.criticised.length);
+  const Chips = ({ list, tone }) => list.length ? list.map(x => <Badge key={x.attr} tone={tone}>{x.attr} <span className="opacity-70 tnum">{x.answers}</span></Badge>) : <span className="text-xs text-muted">nothing yet</span>;
+  return (
+    <Card className="mt-4" title="What AI praises and criticises" subtitle="The reasons the answers give for and against each brand, and in how many answers. This is what to fix, or to say louder.">
+      {!data ? <Spinner /> : !rows.length ? <Empty title="Nothing read yet">Appears after the first real check.</Empty> : (
+        <div className="overflow-x-auto"><table className="w-full">
+          <thead><tr><th className="th">Brand</th><th className="th">Praised for</th><th className="th">Criticised for</th></tr></thead>
+          <tbody>{rows.map(b => (
+            <tr key={b.id} className={b.is_own ? 'bg-accentSoft' : ''}>
+              <td className="td whitespace-nowrap align-top"><span className={b.is_own ? 'font-semibold' : ''}>{b.name}</span><div className="text-[11px] text-muted">{b.answers} answers</div></td>
+              <td className="td align-top"><div className="flex flex-wrap gap-1"><Chips list={b.praised} tone="good" /></div></td>
+              <td className="td align-top"><div className="flex flex-wrap gap-1"><Chips list={b.criticised} tone="bad" /></div></td>
+            </tr>))}
+          </tbody></table></div>
+      )}
+    </Card>
   );
 }

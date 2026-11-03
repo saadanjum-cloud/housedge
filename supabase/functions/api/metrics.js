@@ -2,6 +2,7 @@
 // same functions, same output shapes. Runs as the signed-in person, so only their own projects are visible.
 import { all, get, parseJSON } from './db.js';
 import { SOURCE_TYPES, normName, brandKeys } from './analysis.js';
+import { resolve } from './extract.js';
 
 const DAY = 86400000;
 export const isoDay = d => new Date(d).toISOString().slice(0, 10);
@@ -209,4 +210,27 @@ export async function visibilityByCountry(projectId, f) {
     if (s.totalAnswers > 0) out.push({ country: c, totalAnswers: s.totalAnswers, brands: s.brands });
   }
   return out;
+}
+
+// What the answers praise and criticise about each tracked brand, from the AI reader's stored readings
+// (one- or two-word attributes such as "no subscription", "battery life"). Counted per answer, not per entity.
+export async function perception(projectId, f) {
+  const af = answerFilter(projectId, f);
+  const brands = await brandsOf(projectId);
+  // Readings are stored as a jsonb object or (older rows) as jsonb text: both are read.
+  const rows = await all(`SELECT x.answer_id, e->>'name' name, e->>'website' website, COALESCE(e->'praised', '[]') praised, COALESCE(e->'criticised', '[]') criticised
+    FROM extractions x, jsonb_array_elements((CASE jsonb_typeof(x.data) WHEN 'string' THEN (x.data #>> '{}')::jsonb ELSE x.data END)->'entities') e
+    WHERE x.answer_id IN (${af.sql})`, ...af.params);
+  const per = new Map(brands.map(b => [b.id, { praised: new Map(), criticised: new Map(), answers: new Set() }]));
+  const tally = (m, attrs, answerId) => { for (const a of attrs) { const k = String(a).trim().toLowerCase(); if (!k) continue; (m.get(k) || m.set(k, new Set()).get(k)).add(answerId); } };
+  for (const r of rows) {
+    const [e] = resolve([{ name: r.name, website: r.website }], brands);
+    const t = e.brand_id && per.get(e.brand_id);
+    if (!t) continue;
+    const praised = parseJSON(r.praised, []), criticised = parseJSON(r.criticised, []);
+    if (praised.length || criticised.length) t.answers.add(r.answer_id);
+    tally(t.praised, praised, r.answer_id); tally(t.criticised, criticised, r.answer_id);
+  }
+  const top = m => [...m].map(([attr, ids]) => ({ attr, answers: ids.size })).sort((a, b) => b.answers - a.answers).slice(0, 6);
+  return brands.map(b => { const t = per.get(b.id); return { id: b.id, name: b.name, is_own: b.is_own, answers: t.answers.size, praised: top(t.praised), criticised: top(t.criticised) }; });
 }

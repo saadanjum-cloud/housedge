@@ -34,8 +34,8 @@ export default function Overview() {
       {own && <Headline s={s} own={own} days={f.days} />}
       {own && s.confusion?.answers > 0 && <Confusion c={s.confusion} prev={s.prevConfusion} own={own} />}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat i={0} label="Visibility" help="Share of AI answers that mention your brand at all." value={<CountUp value={own?.visibility} format={fmtPct} />}
-          delta={<Delta now={own?.visibility} before={own?.prev?.visibility} />} sub={`of ${s.totalAnswers} answers`} />
+        <Stat i={0} label="Visibility" help={`Share of AI answers that mention your brand at all. AI answers vary from run to run, so the true share is within about ${moe(own?.visibility, s.totalAnswers)} points of this (95% confidence). More answers narrow it.`} value={<CountUp value={own?.visibility} format={fmtPct} />}
+          delta={<Delta now={own?.visibility} before={own?.prev?.visibility} />} sub={`of ${s.totalAnswers} answers · ±${moe(own?.visibility, s.totalAnswers)} pts`} />
         <Stat i={1} label="Position" help="Your average place when AI gives a numbered list of options (1 = first). Lower is better. Answers that name you in plain text have no place." value={<CountUp value={own?.position} format={fmtPos} />}
           delta={<Delta now={own?.position} before={own?.prev?.position} invert unit="" />} />
         <Stat i={2} label="Sentiment" help="Tone of the sentences that mention you: 0 = very negative, 50 = neutral, 100 = very positive." value={<CountUp value={own?.sentiment} format={v => <Sentiment value={v} />} />}
@@ -146,6 +146,9 @@ function Trends({ daily, className }) {
     </Card>
   );
 }
+
+// Margin of error of a share measured on n answers, in points (95%): AI answers vary, so a share from few answers is rough.
+const moe = (pct, n) => (pct == null || !n ? 0 : Math.round(196 * Math.sqrt((pct / 100) * (1 - pct / 100) / n)));
 
 // Rank of a brand on one metric among all tracked brands (1 = best), now and in the previous period.
 // Out of every tracked brand, so the ranks on different metrics compare; a brand with no value counts as last.

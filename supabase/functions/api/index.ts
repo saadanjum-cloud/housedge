@@ -564,6 +564,7 @@ R('GET', '/projects/:id/summary', metric((p, f) => M.summary(p.id, f)));
 R('GET', '/projects/:id/daily', metric((p, f) => M.daily(p.id, f)));
 R('GET', '/projects/:id/engines', metric((p, f) => M.perEngine(p.id, f)));
 R('GET', '/projects/:id/countries', metric((p, f) => M.visibilityByCountry(p.id, f)));
+R('GET', '/projects/:id/perception', metric((p, f) => M.perception(p.id, f)));
 R('GET', '/projects/:id/sources', metric((p, f) => M.sources(p.id, f)));
 R('GET', '/projects/:id/chats', metric((p, f, c) => M.chats(p.id, { ...f, promptId: Number(c.query.prompt) || undefined }, {
   limit: Math.min(100, Math.max(1, Math.floor(Number(c.query.limit)) || 20)), offset: Math.min(1e6, Math.max(0, Math.floor(Number(c.query.offset)) || 0)),
