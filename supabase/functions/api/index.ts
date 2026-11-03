@@ -645,13 +645,29 @@ R('POST', '/outreach/:id/email', async c => {
   return draftEmail(row.id, key);
 });
 
-// ---------------------------------------------------------------- Ask Housedge: chat over one client's data (read-only)
+// ---------------------------------------------------------------- Ask Housedge: the agent chat over one client's data
+// Streams newline-separated JSON events (text pieces, tool steps) and ends with { t: 'done', reply, ... } or { t: 'error' },
+// so the app can show what the agent is doing while it works.
 R('POST', '/projects/:id/assistant', async c => {
   const key = Deno.env.get('ANTHROPIC_API_KEY');
   if (!key) throw fail('Ask Housedge is not connected yet.', 503);
   const p = await asUser(c.user, async (role: string | null) => { c.role = role; return projectOr404(c.params.id); });
-  const r = await askHousedge(p, c.user, c.role, c.body.messages, { apiKey: key, dispatch });
-  return { reply: r.reply, toolsUsed: [...new Set(r.toolsUsed)], changed: [...new Set(r.changed)], pages: r.pages, cost: Math.round(r.cost * 10000) / 10000 };
+  const enc = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(ctl) {
+      const emit = (e: unknown) => { try { ctl.enqueue(enc.encode(JSON.stringify(e) + '\n')); } catch { /* reader went away */ } };
+      try {
+        const r = await askHousedge(p, c.user, c.role, c.body.messages, { apiKey: key, dispatch, emit });
+        emit({ t: 'done', reply: r.reply, toolsUsed: [...new Set(r.toolsUsed)], changed: [...new Set(r.changed)], pages: r.pages, cost: Math.round(r.cost * 10000) / 10000 });
+      } catch (e) {
+        const shown = e?.expose || e instanceof InputError || e?.code === 'P0001' ? e.message : e?.code === '42501' ? 'You do not have access to this.' : null;
+        if (!shown) console.error('[assistant]', e);
+        emit({ t: 'error', error: shown || 'Something went wrong on our side.' });
+      }
+      try { ctl.close(); } catch { /* already closed */ }
+    },
+  });
+  return new Response(stream, { headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no' } });
 }, false, true);
 
 // ---------------------------------------------------------------- schedule (called every hour by the database's pg_cron)

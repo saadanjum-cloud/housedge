@@ -10,3 +10,6 @@ dist/
 data/
 *.log
 .DS_Store
+
+# local test account logins, never commit
+test-logins.txt

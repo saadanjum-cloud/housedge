@@ -5,7 +5,7 @@ import { Logo, PageIn, Skeleton } from './motion.jsx';
 import { Routes, Route, Navigate, NavLink, Outlet, useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, MessageSquareText, Link2, Users, ListChecks, FileText, Settings, Plus, FolderKanban,
-  Sun, Moon, Monitor, LogOut, Check, Inbox, Globe, Play, Loader2, Download, Route as RouteIcon, ClipboardList, Lightbulb, ListTodo, Send, Menu, X, ShieldCheck, WandSparkles, Gauge,
+  Sun, Moon, Monitor, LogOut, Check, Inbox, Globe, Play, Loader2, Download, Route as RouteIcon, ClipboardList, Lightbulb, ListTodo, Send, Menu, X, ShieldCheck, WandSparkles, Gauge, BotMessageSquare,
 } from 'lucide-react';
 import { api, authHeaders, useApi, setTheme, useDark, useFilters, fmtDate, PREVIEW, signOut, useIdleSignOut, hasSavedSession, nextPath } from './lib.js';
 import { Spinner, SimBadge, Badge, ErrorBox, useToast, Segmented } from './ui.jsx';
@@ -187,6 +187,8 @@ function Shell({ user }) {
       { to: `/p/${pid}/overview`, label: 'Overview', icon: LayoutDashboard },
       { to: `/p/${pid}/journey`, label: 'Client journey', icon: RouteIcon },
       { to: `/p/${pid}/chats`, label: 'Chats', icon: MessageSquareText },
+      // The agent chat: a panel, not a page (the Assistant component listens for this event).
+      { onClick: () => { setOpen(false); window.dispatchEvent(new Event('housedge:ask')); }, label: 'Ask Housedge', icon: BotMessageSquare },
     ] },
     { group: 'Analyse', items: [
       { to: `/p/${pid}/prompts`, label: 'Questions', icon: ListChecks },
@@ -266,7 +268,8 @@ function Shell({ user }) {
 }
 
 // Menu item; the grey highlight slides to the page you open.
-function NavItem({ to, icon: Icon, label, end, count }) {
+function NavItem({ to, icon: Icon, label, end, count, onClick }) {
+  if (!to) return <button type="button" onClick={onClick} className="navlink w-full text-left"><Icon size={15} /><span>{label}</span></button>;
   return (
     <NavLink to={to} end={end} className="navlink relative">
       {({ isActive }) => <>

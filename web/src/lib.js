@@ -90,6 +90,31 @@ export async function api(path, { method = 'GET', body } = {}) {
   return data;
 }
 
+// POST to a route that streams newline-separated JSON events; onEvent gets each one as it arrives.
+// Resolves with the final { t: 'done', ... } event, rejects on { t: 'error' } or a failed request.
+export async function apiStream(path, body, onEvent) {
+  if (PREVIEW) { const r = await api(path, { method: 'POST', body }); onEvent({ t: 'done', ...r }); return r; }
+  const res = await fetch('/api' + path, { method: 'POST', headers: { ...(await authHeaders()), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (res.status === 401) { window.location.replace('/login'); throw new Error('Please log in.'); }
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Something went wrong (${res.status}).`);
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = '', last = null;
+  for (;;) {
+    const { value, done } = await reader.read();
+    buf += done ? dec.decode() : dec.decode(value, { stream: true });
+    const lines = buf.split('\n'); buf = done ? '' : lines.pop();
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const e = JSON.parse(line);
+      if (e.t === 'error') throw new Error(e.error);
+      onEvent(e); if (e.t === 'done') last = e;
+    }
+    if (done) break;
+  }
+  if (!last) throw new Error('The connection dropped before the answer arrived.');
+  return last;
+}
+
 // Loads data and reloads when `deps` change. Returns { data, error, loading, reload }.
 export function useApi(path, deps = []) {
   const [state, setState] = useState({ data: null, error: null, loading: true });
