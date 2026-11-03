@@ -7,6 +7,8 @@ import { COUNTRIES } from './library.js';
 const ENGINE_LABEL = { chatgpt: 'ChatGPT', gemini: 'Gemini', perplexity: 'Perplexity', claude: 'Claude' };
 const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
 const PRIORITY = s => (s >= 45 ? 'high' : s >= 20 ? 'medium' : 'low');
+// The engines whose answers an action is based on (shown as their logos). `sql` selects answer ids.
+const enginesOf = async (sql, ...p) => (await all(`SELECT DISTINCT engine FROM answers WHERE id IN (${sql}) ORDER BY engine`, ...p)).map(r => r.engine);
 
 export async function factReport(projectId) {
   const facts = await all('SELECT id, text, created_at FROM project_facts WHERE project_id = ? ORDER BY id', projectId);
@@ -54,6 +56,7 @@ async function readinessActions(projectId) {
         'Make the correct fact easy to find on your own website (about page, FAQ, structured data).',
         'Ask the cited sites that repeat the wrong claim to correct it, with evidence. Never post anonymous corrections.'],
       evidence: { stats: [`${fact.contradicts} contradicting answers`, `${fact.supports} answers get it right`], quotes: fact.wrong.map(w => ({ text: w.quote, engine: w.engine, day: w.day })) },
+      engines: [...new Set(fact.wrong.map(w => w.engine))].sort(),
     });
   }
   return out;
@@ -80,6 +83,7 @@ export async function computeActions(projectId, f) {
         'Say clearly on your home and About pages what you do, for whom, and that you are not ' + l.name + '.',
         'Check which sites the confused answers cite (Chats page) and make sure your own profiles there are complete and correct.'],
       evidence: { stats: [`${l.answers} confused answers`, `${pct(l.answers, total)}% of all answers`] },
+      engines: await enginesOf(`SELECT answer_id FROM confusions WHERE project_id = ? AND lookalike = ? AND answer_id IN (${af.sql})`, projectId, l.name, ...af.params),
     });
   }
 
@@ -99,6 +103,7 @@ export async function computeActions(projectId, f) {
       key: `source:${d.domain}`, type: 'source', score: Math.min(100, Math.round((100 * d.answers / total) * 2.2 * (1 - ownShare))), ...advice,
       why: `${d.domain} is cited in ${d.answers} of ${total} answers (${pct(d.answers, total)}%). You are named in only ${d.with_own} of those, while ${comp[0].name} is named in ${comp[0].n}.`,
       evidence: { stats: [`Cited in ${d.answers} answers`, `You appear in ${pct(d.with_own, d.answers)}% of them`, ...comp.map(c => `${c.name}: ${pct(c.n, d.answers)}%`)], links: examples },
+      engines: await enginesOf(`SELECT answer_id FROM citations WHERE domain = ? AND answer_id IN (${af.sql})`, d.domain, ...af.params),
     });
   }
 
@@ -114,6 +119,7 @@ export async function computeActions(projectId, f) {
       why: `AI answers cite ${d.domain} ${d.answers} times; your own site is cited in ${ownCites} answers.`,
       steps: ['Open the competitor pages below and note which questions they answer.', 'Publish a clear, factual page on your own site that answers the same questions for your brand.'],
       evidence: { stats: [`${d.domain}: cited in ${d.answers} answers`, `Your site: ${ownCites}`], links: pages },
+      engines: await enginesOf(`SELECT answer_id FROM citations WHERE domain = ? AND answer_id IN (${af.sql})`, d.domain, ...af.params),
     });
   }
 
@@ -129,6 +135,7 @@ export async function computeActions(projectId, f) {
       steps: ['Read a few answers to this question in Chats to see what the AI is looking for.',
         'Make sure your website clearly answers it (facts, licences, numbers), and that the review and news sites AI cites know these facts.'],
       evidence: { stats: [`${p.answers} answers checked`, `You: ${ownVis}%`, `${p.topBrand.name}: ${p.topBrand.visibility}%`], promptId: p.id },
+      engines: p.byEngine.map(x => x.engine),
     });
   }
 
@@ -143,7 +150,7 @@ export async function computeActions(projectId, f) {
       key: `engine:${e}`, type: 'engine', score: Math.round((avgVis - v) * 1.5), title: `You are weaker on ${ENGINE_LABEL[e] || e}`,
       why: `Your visibility on ${ENGINE_LABEL[e] || e} is ${v}%, against ${avgVis}% across all engines.`,
       steps: [`This engine leans most on: ${topSrc.join(', ')}.`, 'Start with the source actions above for those websites.'],
-      evidence: { stats: [`${ENGINE_LABEL[e]}: ${v}%`, `All engines: ${avgVis}%`] },
+      evidence: { stats: [`${ENGINE_LABEL[e]}: ${v}%`, `All engines: ${avgVis}%`] }, engines: [e],
     });
   }
 
@@ -160,6 +167,7 @@ export async function computeActions(projectId, f) {
       why: `In ${COUNTRIES[c] || c}, ${leader.name} appears in ${leader.visibility}% of answers; you appear in ${v}%.`,
       steps: ['Check the Sources page filtered to this country to see which local sites AI relies on.', 'Prioritise local review sites, local news and local-language content.'],
       evidence: { stats: [`You: ${v}%`, `${leader.name}: ${leader.visibility}%`, `${s.totalAnswers} answers`] },
+      engines: await enginesOf(`SELECT a.id FROM answers a JOIN prompts p ON p.id = a.prompt_id WHERE p.country = ? AND a.id IN (${af.sql})`, c, ...af.params),
     });
   }
 
@@ -173,6 +181,7 @@ export async function computeActions(projectId, f) {
       why: `${neg.length} answers describe you in a negative tone.`,
       steps: ['Read the examples below. Are they true today?', 'If fixed, publish clear, dated facts (e.g. payout times) and tell the review sites that repeat the old claim.', 'If still true, this is product feedback.'],
       evidence: { stats: [`${neg.length} negative mentions`, `${pct(neg.length, ownStats.mentions || 1)}% of your mentions`], quotes: uniq.map(n => ({ text: n.snippet, engine: n.engine, day: n.day })) },
+      engines: [...new Set(neg.map(n => n.engine))].sort(),
     });
   }
 
@@ -184,6 +193,7 @@ export async function computeActions(projectId, f) {
       why: `${s.name} appears in ${s.visibility}% of answers but is not on your competitor list.`,
       steps: ['Add it on the Competitors page (one click) so it is counted in share of voice.'],
       evidence: { stats: [`${s.answers} answers mention ${s.name}`] }, suggestion: s.name,
+      engines: await enginesOf(`SELECT answer_id FROM other_brands WHERE project_id = ? AND lower(name) = lower(?) AND answer_id IN (${af.sql})`, projectId, s.name, ...af.params),
     });
   }
   return finalize(projectId, actions);

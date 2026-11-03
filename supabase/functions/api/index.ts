@@ -664,7 +664,7 @@ R('POST', '/projects/:id/assistant', async c => {
       const emit = (e: unknown) => { try { ctl.enqueue(enc.encode(JSON.stringify(e) + '\n')); } catch { /* reader went away */ } };
       try {
         const r = await askHousedge(p, c.user, c.role, c.body.messages, { apiKey: key, dispatch, emit });
-        emit({ t: 'done', reply: r.reply, toolsUsed: [...new Set(r.toolsUsed)], changed: [...new Set(r.changed)], pages: r.pages, cost: Math.round(r.cost * 10000) / 10000 });
+        emit({ t: 'done', reply: r.reply, toolsUsed: [...new Set(r.toolsUsed)], changed: [...new Set(r.changed)], pages: r.pages, charts: r.charts }); // cost stays in ai_spend for the team, not in the client's chat
       } catch (e) {
         const shown = e?.expose || e instanceof InputError || e?.code === 'P0001' ? e.message : e?.code === '42501' ? 'You do not have access to this.' : null;
         if (!shown) console.error('[assistant]', e);
@@ -680,6 +680,13 @@ R('POST', '/projects/:id/assistant', async c => {
 // Only the database knows the secret (kept in Supabase Vault and as the CRON_SECRET function secret). Each tick:
 // resumes checks that stopped (time limit) and starts due checks, each through the same spending locks as Run now.
 // Projects are scheduled only after their first check was started by a person, so nothing spends by surprise.
+// A check that ran out of function time hands itself over to a fresh run here (pipeline.js handOver). Same secret as the schedule.
+R('POST', '/runs/:id/continue', async c => {
+  const secret = Deno.env.get('CRON_SECRET') || '';
+  if (secret.length < 32 || !sameSecret(String(c.body?.secret || ''), secret)) throw notFound();
+  await resumeIfStalled(v.id(c.params.id));
+  return { ok: true };
+}, true);
 R('POST', '/cron/tick', async c => {
   const secret = Deno.env.get('CRON_SECRET') || '';
   if (secret.length < 32 || !sameSecret(String(c.body?.secret || ''), secret)) throw notFound();

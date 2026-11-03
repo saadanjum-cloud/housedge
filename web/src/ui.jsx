@@ -175,3 +175,16 @@ export function Sentiment({ value, compact }) {
   const tone = value >= 60 ? 'text-good' : value <= 40 ? 'text-bad' : 'text-ink2';
   return <span className={`tnum whitespace-nowrap ${tone}`}>{value}{!compact && <span className="text-muted text-xs"> /100</span>}</span>;
 }
+
+// An AI engine's logo (web/public/logos, rules in README.txt: same small size for all, no "partner" wording).
+// On a white disc so the black ChatGPT mark stays visible in dark mode.
+const ENGINE = { chatgpt: ['ChatGPT', '/logos/chatgpt.svg'], gemini: ['Gemini', '/logos/gemini.svg'], perplexity: ['Perplexity', '/logos/perplexity.svg'], claude: ['Claude', '/logos/claude.svg'] };
+export const engineName = id => ENGINE[id]?.[0] || id;
+export function EngineLogo({ id, size = 16 }) {
+  if (!ENGINE[id]) return null;
+  return (
+    <span title={ENGINE[id][0]} className="inline-grid shrink-0 place-items-center rounded-full bg-white ring-1 ring-black/10" style={{ width: size + 6, height: size + 6 }}>
+      <img src={ENGINE[id][1]} alt={ENGINE[id][0]} width={size - 2} height={size - 2} loading="lazy" />
+    </span>
+  );
+}

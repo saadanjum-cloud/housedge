@@ -8,8 +8,21 @@
 import postgres from 'npm:postgres@3.4.5';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-// The connection pooler (transaction mode) is the recommended way in from functions; fall back to the direct URL.
-const sql = postgres(Deno.env.get('DB_POOL_URL') || Deno.env.get('SUPABASE_DB_URL'), {
+// Connect through Supabase's transaction pooler. Functions are given the DIRECT address (SUPABASE_DB_URL); every
+// running copy of the function opening its own direct connections used up the database's slots ("remaining connection
+// slots are reserved", Nov 2026). Same login, pooler host and port. DB_POOL_URL overrides; set DB_POOL_HOST if the
+// project ever moves region.
+function poolUrl() {
+  if (Deno.env.get('DB_POOL_URL')) return Deno.env.get('DB_POOL_URL');
+  const direct = Deno.env.get('SUPABASE_DB_URL');
+  const ref = (() => { try { return new URL(Deno.env.get('SUPABASE_URL')).hostname.split('.')[0]; } catch { return null; } })();
+  if (!direct || !ref) return direct;
+  const u = new URL(direct);
+  if (!u.hostname.startsWith('db.')) return direct; // already a pooler or a local database
+  u.username = `postgres.${ref}`; u.hostname = Deno.env.get('DB_POOL_HOST') || 'aws-0-eu-west-1.pooler.supabase.com'; u.port = '6543';
+  return u.toString();
+}
+const sql = postgres(poolUrl(), {
   prepare: false, max: 4, idle_timeout: 20, connect_timeout: 10, // fail fast instead of hanging on a bad connection
   types: {
     int8: { to: 20, from: [20], serialize: x => String(x), parse: x => Number(x) }, // ids and counts as numbers

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ExternalLink, Check, CalendarClock, EyeOff, RotateCcw, Quote, Info } from 'lucide-react';
 import { useApi, useFilters, api, fmtDate, safeHref } from '../lib.js';
 import { useMeta, useProject } from '../ctx.js';
-import { PageHeader, Spinner, ErrorBox, Badge, SimBanner, Empty, Segmented, useToast } from '../ui.jsx';
+import { PageHeader, Spinner, ErrorBox, Badge, SimBanner, Empty, Segmented, useToast, EngineLogo, engineName } from '../ui.jsx';
 import FilterBar from './FilterBar.jsx';
 import { stagger } from '../motion.jsx';
 
@@ -50,6 +50,8 @@ export default function Actions() {
                 <Badge>{TYPE[a.type] || a.type}</Badge>
                 {a.status === 'planned' && <Badge tone="accent"><CalendarClock size={11} />Planned</Badge>}
                 {a.status === 'done' && <Badge tone="good"><Check size={11} />Done {fmtDate(a.status_at)}</Badge>}
+                {a.engines?.length > 0 && <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted" title={`Based on answers from ${a.engines.map(engineName).join(', ')}`}>
+                  From {a.engines.map(e => <EngineLogo key={e} id={e} size={14} />)}</span>}
               </div>
               <h3 className="mt-2 font-semibold">{a.title}</h3>
               <p className="mt-1 text-sm text-ink2">{a.why}</p>
@@ -62,7 +64,7 @@ export default function Actions() {
                   <div className="mb-1 text-xs font-medium text-muted">Evidence</div>
                   <div className="flex flex-wrap gap-1.5">{a.evidence.stats?.map(s => <span key={s} className="chip">{s}</span>)}</div>
                   {a.evidence.links?.length > 0 && <ul className="mt-2 grid gap-1 text-xs">{a.evidence.links.map(l => <li key={l.url}><a className="inline-flex items-center gap-1 hover:underline" href={safeHref(l.url)} target="_blank" rel="noopener noreferrer">{l.title || l.url}<ExternalLink size={11} /></a></li>)}</ul>}
-                  {a.evidence.quotes?.map(q => <blockquote key={q.text} className="mt-2 flex gap-2 rounded-lg bg-raised p-2 text-xs text-ink2"><Quote size={12} className="shrink-0 text-muted" />{q.text}</blockquote>)}
+                  {a.evidence.quotes?.map(q => <blockquote key={q.text} className="mt-2 flex gap-2 rounded-lg bg-raised p-2 text-xs text-ink2">{q.engine ? <EngineLogo id={q.engine} size={12} /> : <Quote size={12} className="shrink-0 text-muted" />}{q.text}</blockquote>)}
                   {a.evidence.promptId && <Link to={`../chats?prompt=${a.evidence.promptId}`} className="mt-2 inline-block text-xs text-accent underline">Read the answers</Link>}
                 </div>
               </div>

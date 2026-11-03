@@ -26,8 +26,12 @@ const costOf = (model, u, searches = 0) => {
 // Expected cost of one answer on an engine (answer + reading, with a 25% margin), used to check the budget before
 // a check starts and before each answer. From the measured per-engine prices in engines.js.
 export const estPerAnswer = engine => estimateAnswerCost(engine) * 1.25 + 0.002;
-const PARALLEL = 6;
+const PARALLEL = 8;
 const STALE_MS = 180_000; // longer than a function can live: no heartbeat for this long means the worker stopped
+// A function run lives about 150 s. A check stops starting answers at SOFT_MS, gives the ones in flight until
+// HARD_MS, then hands over to a fresh run (handOver) instead of dying and waiting STALE_MS to be resumed.
+const SOFT_MS = 95_000, HARD_MS = 140_000;
+const msLeft = until => Math.max(15_000, Math.min(150_000, until - Date.now()));
 const MAX_ANSWER_CHARS = 60_000;
 const COUNTRY_CODE = { FI: 'FI', SE: 'SE', UK: 'GB', DE: 'DE', US: 'US', PK: 'PK', IN: 'IN', NG: 'NG', PH: 'PH', AE: 'AE' };
 
@@ -53,19 +57,19 @@ async function engineConfig(engine) {
 // ponytail: no location hint (OpenRouter has no portable one); market questions already name the country.
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const RETRY = new Set([408, 429, 500, 502, 503, 504]);
-export async function askOpenRouter(engine, question, { model, search = 'native', maxTokens = 8000, web = true }) {
+export async function askOpenRouter(engine, question, { model, search = 'native', maxTokens = 8000, web = true, until = Date.now() + 150_000 }) {
   const label = ENGINES[engine].label;
   for (let attempt = 0; ; attempt++) {
     let status = 0, j = {};
     try {
       const res = await fetch(OR_URL, {
-        method: 'POST', signal: AbortSignal.timeout(150_000),
+        method: 'POST', signal: AbortSignal.timeout(msLeft(until)),
         headers: { Authorization: `Bearer ${orKey()}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://www.housedge.eu', 'X-Title': 'Housedge' },
         body: JSON.stringify({ model, messages: [{ role: 'user', content: question }], max_tokens: maxTokens, usage: { include: true },
           ...(web ? { plugins: [{ id: 'web', engine: search, max_results: 8 }] } : {}) }),
       });
       status = res.status; j = await res.json().catch(() => ({}));
-    } catch (e) { j = { error: { message: e?.name === 'TimeoutError' ? 'no answer within 150 seconds' : String(e?.message || e) } }; }
+    } catch (e) { j = { error: { message: e?.name === 'TimeoutError' ? 'no answer in time' : String(e?.message || e) } }; }
     const msg = j.choices?.[0]?.message;
     if (!j.error && msg && !String(msg.content || '').trim()) j.error = { message: 'returned an empty answer', code: 502 };
     if (!j.error && msg) {
@@ -78,7 +82,7 @@ export async function askOpenRouter(engine, question, { model, search = 'native'
         cost: Number(u.cost) || 0, inT: u.prompt_tokens || 0, outT: u.completion_tokens || 0 };
     }
     const code = Number(j.error?.code) || status;
-    if (attempt >= 2 || (status && !RETRY.has(code) && !RETRY.has(status))) throw new Error(`${label} (OpenRouter) said: ${j.error?.message || `error ${status}`}`);
+    if (attempt >= 2 || until - Date.now() < 25_000 || (status && !RETRY.has(code) && !RETRY.has(status))) throw new Error(`${label} (OpenRouter) said: ${j.error?.message || `error ${status}`}`);
     await new Promise(r => setTimeout(r, 5000 * (attempt + 1))); // Google often answers "too many requests"; a short wait fixes it
   }
 }
@@ -96,18 +100,18 @@ async function realUrl(c) {
 const NO_LOCATION = new Set();
 
 // Same request as the old server's tested Claude adapter (server/engines/live.js).
-async function askClaude(client, question, country) {
+async function askClaude(client, question, country, until = Date.now() + 150_000) {
   const code = COUNTRY_CODE[country];
   try {
-    return await askClaudeOnce(client, question, code && !NO_LOCATION.has(code) ? code : null);
+    return await askClaudeOnce(client, question, code && !NO_LOCATION.has(code) ? code : null, until);
   } catch (e) {
     if (!code || !/country code \w+ is not supported/i.test(String(e?.message))) throw e;
     NO_LOCATION.add(code);
-    return askClaudeOnce(client, question, null);
+    return askClaudeOnce(client, question, null, until);
   }
 }
 
-async function askClaudeOnce(client, question, code) {
+async function askClaudeOnce(client, question, code, until) {
   const tool = { type: 'web_search_20260209', name: 'web_search', max_uses: 5 };
   if (code) tool.user_location = { type: 'approximate', country: code };
   const messages = [{ role: 'user', content: question }];
@@ -116,7 +120,7 @@ async function askClaudeOnce(client, question, code) {
     if (r?.stop_reason === 'pause_turn') messages.push({ role: 'assistant', content: r.content }); // long searches pause; continue
     else if (r) break;
     r = await client.beta.messages.create({ model: RUN_MODEL, max_tokens: 16000, messages, tools: [tool], output_config: { effort: 'medium' },
-      betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });
+      betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' }, { timeout: msLeft(until), maxRetries: 0 });
     inT += r.usage?.input_tokens || 0; outT += r.usage?.output_tokens || 0; searches += r.usage?.server_tool_use?.web_search_requests || 0;
   }
   if (r.stop_reason === 'refusal') throw new Error('Claude declined to answer this question (safety filter).');
@@ -174,6 +178,14 @@ export async function resumeIfStalled(runId) {
   if (claimed) inBackground(() => processRun(runId));
 }
 
+// Asks this same function to continue the check in a new run (with a fresh time limit). If the call fails, the
+// stalled-check resume (progress polling, hourly schedule) still picks it up after STALE_MS.
+async function handOver(runId) {
+  await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/api/runs/${runId}/continue?forceFunctionRegion=eu-west-1`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ secret: Deno.env.get('CRON_SECRET') || '' }), signal: AbortSignal.timeout(15_000),
+  }).then(r => { if (!r.ok) console.error('[run] hand-over', runId, r.status); }).catch(e => console.error('[run] hand-over', runId, clean(e)));
+}
+
 function inBackground(start) {
   const promise = detached(start); // its own transactions, never the request's (closed once the response is sent)
   // @ts-ignore EdgeRuntime is provided by Supabase: keeps the function alive after the response until this finishes.
@@ -181,6 +193,7 @@ function inBackground(start) {
 }
 
 async function processRun(runId) {
+  const t0 = Date.now(), until = t0 + HARD_MS;
   const client = new Anthropic({ apiKey: apiKey(), timeout: 120_000, maxRetries: 1 });
   try {
     const r = await db(() => get('SELECT r.*, p.org_id, p.engines FROM runs r JOIN projects p ON p.id = r.project_id WHERE r.id = ?', runId));
@@ -198,16 +211,20 @@ async function processRun(runId) {
     const day = isoDay(Date.now());
     let stopped = null;
     const worker = async () => {
-      while (todo.length && !stopped) {
+      while (todo.length && !stopped && Date.now() - t0 < SOFT_MS) {
         const q = todo.shift();
         // Checked before every question, so a check stops as soon as any spending lock would be crossed
         // (also when several checks of one company run at the same time).
         try { await db(() => assertCanSpend(r.org_id, estPerAnswer(q.engine))); } catch (e) { stopped = e.message; break; }
-        await answerOne(client, { runId, projectId, orgId: r.org_id, q, engine: q.engine, conf: conf[q.engine], day, brands, cfg });
+        await answerOne(client, { runId, projectId, orgId: r.org_id, q, engine: q.engine, conf: { ...conf[q.engine], until }, day, brands, cfg });
         await db(() => run('UPDATE runs SET heartbeat_at = now() WHERE id = ?', runId));
       }
     };
     await Promise.all(Array.from({ length: PARALLEL }, worker));
+    if (todo.length && !stopped) { // out of time: a fresh function run continues at once
+      await db(() => run('UPDATE runs SET heartbeat_at = NULL WHERE id = ?', runId));
+      return handOver(runId);
+    }
     await finish(runId, projectId, stopped);
   } catch (e) {
     console.error('[run]', runId, clean(e));
@@ -218,7 +235,7 @@ async function processRun(runId) {
 async function answerOne(client, { runId, projectId, orgId, q, engine, conf, day, brands, cfg }) {
   let a;
   try {
-    a = engine === 'claude' ? await askClaude(client, q.text, q.country) : await askOpenRouter(engine, q.text, conf);
+    a = engine === 'claude' ? await askClaude(client, q.text, q.country, conf.until) : await askOpenRouter(engine, q.text, conf);
   } catch (e) {
     await db(() => run(`INSERT INTO answers (run_id, project_id, prompt_id, engine, day, model, error) VALUES (?,?,?,?,?,?,?)`, runId, projectId, q.id, engine, day, conf.model, clean(e)));
     await db(() => run('UPDATE runs SET failed = failed + 1 WHERE id = ?', runId));

@@ -8,7 +8,7 @@ import {
   Sun, Moon, Monitor, LogOut, Check, Inbox, Globe, Play, Loader2, Download, Route as RouteIcon, ClipboardList, Lightbulb, ListTodo, Send, Menu, X, ShieldCheck, WandSparkles, Gauge, BotMessageSquare,
 } from 'lucide-react';
 import { api, authHeaders, useApi, setTheme, useDark, useFilters, fmtDate, PREVIEW, signOut, useIdleSignOut, hasSavedSession, nextPath } from './lib.js';
-import { Spinner, SimBadge, Badge, ErrorBox, useToast, Segmented } from './ui.jsx';
+import { Spinner, SimBadge, Badge, ErrorBox, useToast, Segmented, EngineLogo, engineName } from './ui.jsx';
 const authPage = name => lazy(() => import('./pages/Auth.jsx').then(m => ({ default: m[name] })));
 const [Login, Setup, Invite, Reset, ResetPassword, AdminLogin, SignUp, Consent] = ['Login', 'Setup', 'Invite', 'Reset', 'ResetPassword', 'AdminLogin', 'SignUp', 'Consent'].map(authPage);
 const Onboarding = lazy(() => import('./pages/Onboarding.jsx'));
@@ -169,7 +169,27 @@ function ThemeSwitch() {
   );
 }
 
+// After a deploy, an open tab keeps running the old code (and talks to the new server). Compare this page's script
+// with the one the site serves now, every few minutes and when the tab comes back, and offer a reload.
+function useNewVersion() {
+  const [fresh, setFresh] = useState(false);
+  useEffect(() => {
+    const mine = document.querySelector('script[type="module"][src*="/assets/index-"]')?.getAttribute('src');
+    if (!mine) return; // dev server: no built file to compare
+    const check = () => fetch('/', { cache: 'no-store' }).then(r => r.text()).then(html => {
+      const live = html.match(/\/assets\/index-[\w-]+\.js/)?.[0];
+      if (live && !mine.endsWith(live)) setFresh(true);
+    }).catch(() => {});
+    const t = setInterval(check, 5 * 60_000);
+    const onShow = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onShow);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onShow); };
+  }, []);
+  return fresh;
+}
+
 function Shell({ user }) {
+  const newVersion = useNewVersion();
   const meta = useMeta();
   const { id } = useParams();
   const projects = useApi('/projects');
@@ -254,6 +274,11 @@ function Shell({ user }) {
             <button className="absolute right-3 top-3" onClick={() => setOpen(false)} aria-label="Close menu"><X size={18} /></button>
             {sidebar}
           </aside>
+        </div>
+      )}
+      {newVersion && (
+        <div className="no-print fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border border-line bg-surface px-4 py-2 text-[13px] shadow-lift">
+          A new version of Housedge is available.<button className="font-semibold text-accent hover:underline" onClick={() => window.location.reload()}>Reload</button>
         </div>
       )}
       <main className="min-w-0 flex-1 px-4 pb-24 pt-6 md:px-10 md:pb-24 md:pt-10 print-full">
@@ -424,13 +449,22 @@ function Research({ run, project }) {
   const items = run?.items || [];
   const total = run?.total || project.promptCount;
   const label = id => meta.engines?.find(e => e.id === id)?.label || id;
-  const color = id => meta.engines?.find(e => e.id === id)?.color || 'var(--muted)';
   const engines = (run?.engines?.length ? run.engines : ['claude']).map(label);
   const names = engines.length > 1 ? `${engines.slice(0, -1).join(', ')} and ${engines[engines.length - 1]}` : engines[0];
   const questions = new Set(items.map(q => q.id)).size || project.promptCount;
   const finished = (run?.done || 0) + (run?.failed || 0);
   const secs = run ? Math.max(0, Math.round((now - new Date(run.started_at)) / 1000)) : 0;
+  // The first answers not yet in are the ones being asked (8 at a time on the server); the rest wait.
   let asking = 0;
+  const stateBy = new Map(items.map(q => [q, !q.answer_id ? (asking++ < 8 ? 'asking' : 'waiting') : q.error ? 'failed' : q.read ? 'done' : 'reading']));
+  const stateOf = q => stateBy.get(q) || 'waiting';
+  // One row per question, its engines side by side, in the order the server lists them.
+  const groups = [];
+  for (const q of items.length ? items : Array.from({ length: project.promptCount || 0 }, (_, i) => ({ id: `s${i}`, text: '' }))) {
+    let g = groups.find(x => x.id === q.id);
+    if (!g) groups.push(g = { id: q.id, text: q.text, rows: [] });
+    g.rows.push(q);
+  }
   return (
     <div className="card rise p-6 md:p-8">
       <div className="flex items-start gap-4">
@@ -444,37 +478,39 @@ function Research({ run, project }) {
         <div className="h-2 flex-1 overflow-hidden rounded-full bg-fill">
           <div className="h-full rounded-full bg-accent transition-all duration-700" style={{ width: `${Math.max(3, (100 * finished) / (total || 1))}%` }} />
         </div>
-        <span className="text-[13px] font-semibold tnum">{finished} of {total}</span>
+        <span className="text-[13px] font-semibold tnum">{finished} of {total} answers</span>
         <span className="text-[13px] text-muted tnum">{Math.floor(secs / 60)}:{String(secs % 60).padStart(2, '0')}</span>
       </div>
       <ul className="mt-6 grid gap-1.5">
-        {(items.length ? items : Array.from({ length: total }, (_, i) => ({ id: i, text: '' }))).map((q, i) => {
-          const state = !q.answer_id ? (asking++ < 6 ? 'asking' : 'waiting') : q.error ? 'failed' : q.read ? 'done' : 'reading';
-          const me = (q.brands || []).find(x => x.own);
-          const others = (q.brands || []).filter(x => !x.own).map(x => x.name);
+        {groups.map(g => {
+          const states = g.rows.map(stateOf);
+          const all = s => states.every(x => x === s);
+          const overall = all('done') ? 'done' : states.every(x => x === 'done' || x === 'failed') ? (states.includes('done') ? 'done' : 'failed') : all('waiting') ? 'waiting' : 'working';
           return (
-            <li key={`${q.id}-${q.engine || i}`} className="flex items-start gap-3 rounded-xl px-3 py-2.5" style={{ background: state === 'done' ? 'var(--fill)' : 'transparent' }}>
+            <li key={g.id} className="flex items-start gap-3 rounded-xl px-3 py-2.5" style={{ background: overall === 'done' ? 'var(--fill)' : 'transparent' }}>
               <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center">
-                {state === 'done' ? <span className="grid h-5 w-5 place-items-center rounded-full bg-accent text-white"><Check size={12} /></span>
-                  : state === 'failed' ? <X size={15} className="text-bad" />
-                    : state === 'waiting' ? <span className="h-2 w-2 rounded-full bg-line" /> : <Loader2 size={15} className="animate-spin text-accent" />}
+                {overall === 'done' ? <span className="grid h-5 w-5 place-items-center rounded-full bg-accent text-white"><Check size={12} /></span>
+                  : overall === 'failed' ? <X size={15} className="text-bad" />
+                    : overall === 'waiting' ? <span className="h-2 w-2 rounded-full bg-line" /> : <Loader2 size={15} className="animate-spin text-accent" />}
               </span>
               <div className="min-w-0 flex-1">
-                <div className={`flex flex-wrap items-center gap-x-2 text-[14px] ${state === 'waiting' ? 'text-muted' : 'font-medium'}`}>
-                  {q.engine && <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-fill px-2 py-0.5 text-[11.5px] font-semibold text-ink2">
-                    <span className="h-2 w-2 rounded-full" style={{ background: color(q.engine) }} />{label(q.engine)}</span>}
-                  {q.text || <span className="skeleton inline-block h-3 w-64 align-middle" />}
-                </div>
-                <div className="mt-0.5 text-[12px] text-muted">
-                  {state === 'asking' && `Asking ${label(q.engine || 'claude')} and searching the web…`}
-                  {state === 'waiting' && 'Waiting'}
-                  {state === 'reading' && 'Answered. Reading which brands it names…'}
-                  {state === 'failed' && 'Could not be answered this time.'}
-                  {state === 'done' && <>
-                    <span className={me ? 'font-semibold text-ink' : ''}>{me ? `${own} mentioned${me.rank ? ` · #${me.rank}` : ''}` : `${own} not mentioned`}</span>
-                    {others.length > 0 && <> · also {others.slice(0, 4).join(', ')}{others.length > 4 ? ` +${others.length - 4}` : ''}</>}
-                    {' '}·{q.searches != null ? ` ${q.searches} searches ·` : ''} {q.sources || 0} sources
-                  </>}
+                <div className={`text-[14px] ${overall === 'waiting' ? 'text-muted' : 'font-medium'}`}>{g.text || <span className="skeleton inline-block h-3 w-64 align-middle" />}</div>
+                {/* The same question, asked to each engine: its logo and what came back. */}
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                  {g.rows.filter(q => q.engine).map((q, k) => {
+                    const st = states[g.rows.indexOf(q)];
+                    const me = (q.brands || []).find(x => x.own);
+                    return (
+                      <span key={q.engine || k} className="inline-flex items-center gap-1.5 text-[12px] text-muted" title={st === 'done' ? `${engineName(q.engine)}: ${q.sources || 0} sources${(q.brands || []).length ? ` · names ${(q.brands || []).map(x => x.name).join(', ')}` : ''}` : engineName(q.engine)}>
+                        <EngineLogo id={q.engine} size={13} />
+                        {st === 'asking' ? <><Loader2 size={11} className="animate-spin text-accent" />asking</>
+                          : st === 'waiting' ? 'waiting'
+                            : st === 'reading' ? <><Loader2 size={11} className="animate-spin text-accent" />reading</>
+                              : st === 'failed' ? <span className="text-bad">failed</span>
+                                : <span className={me ? 'font-semibold text-ink' : ''}>{me ? `${own}${me.rank ? ` #${me.rank}` : ' named'}` : 'not named'}</span>}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             </li>

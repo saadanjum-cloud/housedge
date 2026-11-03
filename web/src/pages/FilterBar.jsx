@@ -1,6 +1,7 @@
 import { Calendar, Globe, Tag, Bot } from 'lucide-react';
 import { useApi, useFilters, COUNTRY_FLAGS } from '../lib.js';
 import { useMeta, useProject } from '../ctx.js';
+import { EngineLogo } from '../ui.jsx';
 
 // Compact filter pills along the top of every data page.
 function SelectPill({ icon: Icon, value, onChange, label, children }) {
@@ -32,7 +33,7 @@ export default function FilterBar({ showDays = true }) {
       <span className="mx-1 hidden h-5 w-px bg-line sm:block" aria-hidden />
       <div className="flex flex-wrap items-center gap-1" role="group" aria-label="AI engines">
         <button className={`pill ${!selected.length ? 'pill-on' : ''}`} onClick={() => set({ engines: '' })}><Bot size={14} className="text-muted" />All engines</button>
-        {engines.map(e => <button key={e} className={`pill ${selected.includes(e) ? 'pill-on' : ''}`} aria-pressed={selected.includes(e)} onClick={() => toggle(e)}>{label(e)}</button>)}
+        {engines.map(e => <button key={e} className={`pill ${selected.includes(e) ? 'pill-on' : ''}`} aria-pressed={selected.includes(e)} onClick={() => toggle(e)}><EngineLogo id={e} size={12} />{label(e)}</button>)}
       </div>
       <span className="mx-1 hidden h-5 w-px bg-line sm:block" aria-hidden />
       <SelectPill icon={Globe} value={f.country} onChange={v => set({ country: v })} label="Country">

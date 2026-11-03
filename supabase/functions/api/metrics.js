@@ -163,12 +163,18 @@ export async function promptTable(projectId, f) {
     JOIN brands b ON b.id = m.brand_id WHERE m.answer_id IN (${af.sql}) GROUP BY a.prompt_id, m.brand_id, b.name ORDER BY n DESC`, ...af.params);
   const topBy = new Map();
   for (const t of top) if (!topBy.has(t.prompt_id)) topBy.set(t.prompt_id, t);
+  // Per question and engine: answers and how many name the client.
+  const engineRows = await all(`SELECT a.prompt_id, a.engine, COUNT(*) n,
+      COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM mentions m WHERE m.answer_id = a.id AND m.brand_id = ?)) own
+    FROM answers a WHERE a.id IN (${af.sql}) GROUP BY a.prompt_id, a.engine ORDER BY a.engine`, own?.id ?? -1, ...af.params);
+  const byEngine = new Map();
+  for (const r of engineRows) byEngine.set(r.prompt_id, [...(byEngine.get(r.prompt_id) || []), { engine: r.engine, answers: r.n, visibility: round(100 * r.own / r.n) }]);
   return prompts.map(p => {
     const n = counts.get(p.id) || 0, o = ownRows.get(p.id), t = topBy.get(p.id);
     return {
       ...p, active: p.active ? 1 : 0, tags: parseJSON(p.tags, []), answers: n,
       visibility: n ? round(100 * (o?.n || 0) / n) : null, position: o ? round(o.pos) : null, sentiment: o?.sent == null ? null : Math.round(o.sent),
-      topBrand: t ? { name: t.name, visibility: n ? round(100 * t.n / n) : 0 } : null,
+      topBrand: t ? { name: t.name, visibility: n ? round(100 * t.n / n) : 0 } : null, byEngine: byEngine.get(p.id) || [],
     };
   });
 }

@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Sparkles, Home, ArrowUpRight, ArrowDownRight, ChevronsUp, ChevronsDown, AlertTriangle, ArrowRight, Lightbulb } from 'lucide-react';
-import { useApi, useFilters, api, fmtPct, fmtPos, COUNTRY_FLAGS, namesBrand } from '../lib.js';
+import { Plus, Sparkles, ArrowUp, ArrowDown, ArrowUpRight, ArrowDownRight, AlertTriangle, ArrowRight, Lightbulb } from 'lucide-react';
+import { ResponsiveContainer, AreaChart, Area, Tooltip } from 'recharts';
+import { useApi, useFilters, useColors, api, fmtPct, fmtPos, fmtDate, COUNTRY_FLAGS, namesBrand } from '../lib.js';
 import { useMeta, useProject } from '../ctx.js';
-import { Card, Stat, Delta, Spinner, ErrorBox, SimBanner, Empty, Segmented, BrandDot, Bar, Sentiment, useToast } from '../ui.jsx';
+import { Card, Spinner, ErrorBox, SimBanner, Empty, Segmented, BrandDot, Bar, Sentiment, useToast, EngineLogo, engineName } from '../ui.jsx';
 import { TrendChart, ShareOfVoiceChart, VisibilitySentimentMap, Legend, smooth } from '../charts.jsx';
 import FilterBar from './FilterBar.jsx';
-import { CountUp } from '../motion.jsx';
+import { CountUp, stagger } from '../motion.jsx';
 
 export default function Overview() {
   const { project, reload, readOnly } = useProject();
@@ -31,25 +32,22 @@ export default function Overview() {
     <>
       <FilterBar />
       <div className="mb-4"><SimBanner show={s.simulatedAnswers > 0} /></div>
-      {own && <Headline s={s} own={own} days={f.days} />}
       {own && s.confusion?.answers > 0 && <Confusion c={s.confusion} prev={s.prevConfusion} own={own} />}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat i={0} label="Visibility" help={`Share of AI answers that mention your brand at all. AI answers vary from run to run, so the true share is within about ${moe(own?.visibility, s.totalAnswers)} points of this (95% confidence). More answers narrow it.`} value={<CountUp value={own?.visibility} format={fmtPct} />}
-          delta={<Delta now={own?.visibility} before={own?.prev?.visibility} />} sub={`of ${s.totalAnswers} answers · ±${moe(own?.visibility, s.totalAnswers)} pts`} />
-        <Stat i={1} label="Position" help="Your average place when AI gives a numbered list of options (1 = first). Lower is better. Answers that name you in plain text have no place." value={<CountUp value={own?.position} format={fmtPos} />}
-          delta={<Delta now={own?.position} before={own?.prev?.position} invert unit="" />} />
-        <Stat i={2} label="Sentiment" help="Tone of the sentences that mention you: 0 = very negative, 50 = neutral, 100 = very positive." value={<CountUp value={own?.sentiment} format={v => <Sentiment value={v} />} />}
-          delta={<Delta now={own?.sentiment} before={own?.prev?.sentiment} digits={0} />} />
-        <Stat i={3} label="Share of voice" help="Your mentions as a share of all mentions of tracked brands." value={<CountUp value={own?.sov} format={fmtPct} />}
-          delta={<Delta now={own?.sov} before={own?.prev?.sov} />} sub={`rank #${own?.rank} of ${s.brands.length}`} />
-      </div>
-      <p className="mt-2 text-xs text-muted">Changes compare with the previous {f.days} days.</p>
-      {own && <Discovery prompts={prompts.data} own={project.brands.find(b => b.is_own) || own} />}
+      {own && (
+        <div className="grid gap-4 xl:grid-cols-5">
+          <Hero className="xl:col-span-3" s={s} own={own} daily={daily.data} days={f.days} unbranded={unbranded(prompts.data, project.brands.find(b => b.is_own) || own)} />
+          <Standings className="xl:col-span-2" brands={s.brands} />
+        </div>
+      )}
+      {own && <Engines data={engines.data} own={own} days={f.days} />}
       <NextActions list={actions.data} />
-
       {!!sugg.data?.length && <Suggestions list={sugg.data.slice(0, 3)} projectId={project.id} onAdded={reload} readOnly={readOnly} />}
 
-      <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-12">
+      <div className="mt-10 border-t border-line pt-6">
+        <h2 className="text-[17px] font-semibold tracking-title">Details</h2>
+        <p className="mt-0.5 text-[13px] text-muted">Trends, competitors and the full numbers per engine and country.</p>
+      </div>
+      <div className="mt-4 grid grid-cols-1 gap-5 xl:grid-cols-12">
         <Trends className="xl:col-span-6" daily={daily.data} />
         <Ranking className="xl:col-span-6" brands={s.brands} />
       </div>
@@ -70,24 +68,147 @@ export default function Overview() {
   );
 }
 
+// Change chip that reads on the dark hero card.
+function HeroDelta({ now, before, invert, digits = 1, unit = 'pts' }) {
+  if (now == null || before == null) return null;
+  const d = Math.round((now - before) * 10 ** digits) / 10 ** digits;
+  if (Math.abs(d) < 0.05) return <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/70">no change</span>;
+  const better = invert ? d < 0 : d > 0;
+  const Icon = d > 0 ? ArrowUp : ArrowDown;
+  return (
+    <span className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold tnum" style={better ? { background: 'rgba(142,240,190,.18)', color: 'var(--mint)' } : { background: 'rgba(255,105,97,.2)', color: '#ffa39e' }}>
+      <Icon size={11} strokeWidth={2.5} aria-hidden />{Math.abs(d)} {unit}<span className="sr-only">{better ? '(better)' : '(worse)'}</span>
+    </span>
+  );
+}
+
+// The one card that matters: how often AI names the client, with the trend and the verdict in a sentence.
+function Hero({ s, own, daily, days, unbranded, className = '' }) {
+  const named = Math.round((own.visibility || 0) * s.totalAnswers / 100);
+  const rivals = s.brands.length - 1;
+  const leader = [...s.brands].sort((a, b) => (b.visibility ?? 0) - (a.visibility ?? 0))[0];
+  const verdict = own.rank === 1 ? `more than any of your ${rivals} competitors.` : `#${own.rank} of ${s.brands.length}: ${leader.name} is named most (${fmtPct(leader.visibility)}).`;
+  const series = daily ? smooth(daily.series, [`v_${own.id}`]) : null;
+  const secondary = [
+    ['Position', fmtPos(own.position), <HeroDelta now={own.position} before={own.prev?.position} invert unit="" />, 'Average place in numbered lists (1 = first)'],
+    ['Sentiment', own.sentiment == null ? '—' : `${own.sentiment}/100`, <HeroDelta now={own.sentiment} before={own.prev?.sentiment} digits={0} />, 'Tone of the sentences that mention you (50 = neutral)'],
+    ['Share of voice', fmtPct(own.sov), <HeroDelta now={own.sov} before={own.prev?.sov} />, 'Your share of all tracked-brand mentions'],
+    unbranded && ['Unbranded questions', fmtPct(unbranded.v), null, `Named in ${fmtPct(unbranded.v)} of ${unbranded.n} answers to the ${unbranded.open} questions that do not mention ${own.name}. The other ${unbranded.branded} name it almost automatically, so this is the number to grow.`],
+  ].filter(Boolean);
+  return (
+    <section className={`rise relative overflow-hidden rounded-2xl bg-forest p-6 text-white shadow-card md:p-7 ${className}`}>
+      <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full opacity-30 blur-3xl" style={{ background: 'var(--mint)' }} aria-hidden />
+      <div className="relative">
+        <div className="eyebrow !text-white/60">AI visibility · last {days} days</div>
+        <div className="mt-2 flex flex-wrap items-end gap-3">
+          <span className="text-[56px] font-bold leading-none tracking-display tnum md:text-[64px]"><CountUp value={own.visibility} format={fmtPct} /></span>
+          <span className="mb-2"><HeroDelta now={own.visibility} before={own.prev?.visibility} /></span>
+        </div>
+        <p className="mt-3 max-w-md text-[15px] leading-snug text-white/80">
+          {own.name} is named in <strong className="text-white">{named} of {s.totalAnswers}</strong> AI answers, {verdict}
+        </p>
+        <div className="mt-4 h-[96px] -mx-2">
+          {series ? <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={series} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
+              <defs><linearGradient id="heroFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--mint)" stopOpacity={0.45} /><stop offset="100%" stopColor="var(--mint)" stopOpacity={0} /></linearGradient></defs>
+              <Tooltip cursor={{ stroke: 'rgba(255,255,255,.3)' }} content={({ active, payload, label }) => active && payload?.[0] ? <div className="rounded-lg bg-black/70 px-2.5 py-1.5 text-xs text-white">{fmtDate(label)} · {payload[0].value}%</div> : null} />
+              <Area type="monotone" dataKey={`v_${own.id}`} stroke="var(--mint)" strokeWidth={2} fill="url(#heroFill)" dot={false} isAnimationActive={false} />
+            </AreaChart>
+          </ResponsiveContainer> : null}
+        </div>
+        <dl className={`mt-4 grid gap-3 border-t border-white/10 pt-4 ${secondary.length === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
+          {secondary.map(([label, value, delta, help]) => (
+            <div key={label} title={help}>
+              <dt className="text-[11.5px] font-medium text-white/55">{label}</dt>
+              <dd className="mt-1 flex flex-wrap items-center gap-2"><span className="text-[20px] font-semibold leading-none tnum">{value}</span>{delta}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
+  );
+}
+
+// Every tracked brand as a bar, so the client sees the gap to each rival at a glance.
+function Standings({ brands, className = '' }) {
+  const c = useColors();
+  const rows = [...brands].sort((a, b) => a.rank - b.rank);
+  const max = Math.max(1, ...rows.map(b => b.visibility || 0));
+  return (
+    <Card className={`rise ${className}`} title="Where you stand" subtitle="Share of AI answers that name each brand." right={<Link to="../competitors" className="inline-flex items-center gap-1 text-[12.5px] text-accent hover:underline">Competitors<ArrowRight size={13} /></Link>}>
+      <ol className="space-y-2.5">
+        {rows.map(b => (
+          <li key={b.id} className="grid grid-cols-[1.25rem_7rem_1fr_3rem] items-center gap-2 text-[13px]">
+            <span className="tnum text-muted">{b.rank}</span>
+            <span className={`truncate ${b.is_own ? 'font-semibold text-ink' : 'text-ink2'}`}>{b.name}</span>
+            <span className="h-2 overflow-hidden rounded-full bg-fill" aria-hidden>
+              <span className="block h-full rounded-full transition-[width] duration-700" style={{ width: `${100 * (b.visibility || 0) / max}%`, background: b.is_own ? 'var(--accent)' : c.brand(b.color), opacity: b.is_own ? 1 : 0.55 }} />
+            </span>
+            <span className={`text-right tnum ${b.is_own ? 'font-semibold' : 'text-ink2'}`}>{fmtPct(b.visibility)}</span>
+          </li>
+        ))}
+      </ol>
+    </Card>
+  );
+}
+
+function Ring({ value, size = 56, stroke = 5, color = 'var(--accent)' }) {
+  const r = (size - stroke) / 2, len = 2 * Math.PI * r;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0" aria-hidden>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--fill)" strokeWidth={stroke} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={len} strokeDashoffset={len * (1 - Math.min(100, value || 0) / 100)} transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ transition: 'stroke-dashoffset .9s cubic-bezier(.2,.7,.2,1)' }} />
+    </svg>
+  );
+}
+
+// One tile per AI assistant. Numbers on the tiles; the heading says which one to work on.
+function Engines({ data, own, days }) {
+  if (!data || data.length < 2) return null;
+  const rows = data.map(e => {
+    const sorted = [...e.brands].sort((a, b) => (b.visibility ?? 0) - (a.visibility ?? 0));
+    const me = e.brands.find(b => b.is_own);
+    return { engine: e.engine, answers: e.totalAnswers, vis: me?.visibility ?? 0, rank: sorted.findIndex(b => b.is_own) + 1, of: sorted.length, leader: sorted[0] };
+  }).sort((a, b) => b.vis - a.vis);
+  const best = rows[0], worst = rows[rows.length - 1];
+  const gap = best.vis - worst.vis >= 15;
+  const weakest = gap ? worst : rows.find(r => !r.leader?.is_own);
+  return (
+    <section className="mt-4">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-[17px] font-semibold tracking-title">By AI assistant</h2>
+        <p className="text-[13px] text-muted">{weakest ? <>Weakest on <strong className="text-ink">{engineName(weakest.engine)}</strong>: start there.</> : `No competitor is named more than ${own.name} on any assistant.`}</p>
+      </div>
+      <div className={`grid gap-3 sm:grid-cols-2 ${rows.length >= 3 ? 'lg:grid-cols-3' : ''} ${rows.length >= 4 ? 'xl:grid-cols-4' : ''}`}>
+        {rows.map((r, i) => (
+          <Link key={r.engine} to={`../chats?engines=${r.engine}&days=${days}`} title={`Read what ${engineName(r.engine)} answers`} style={stagger(i + 2)}
+            className={`card rise flex items-center gap-4 p-4 transition-colors hover:border-accent ${r === weakest ? 'ring-1 ring-warnInk/40' : ''}`}>
+            <div className="relative grid place-items-center">
+              <Ring value={r.vis} color={r === weakest ? 'var(--warn-ink)' : 'var(--accent)'} />
+              <span className="absolute text-[13px] font-semibold tnum">{Math.round(r.vis)}%</span>
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2"><EngineLogo id={r.engine} size={16} /><span className="font-semibold">{engineName(r.engine)}</span>
+                {r === weakest && <span className="rounded-full bg-warnBg px-2 py-0.5 text-[11px] font-semibold text-warnInk">Start here</span>}</div>
+              <div className="mt-1 text-[12.5px] text-ink2">{r.leader?.is_own ? `#1 of ${r.of}` : `#${r.rank} of ${r.of} · ${r.leader?.name} leads with ${fmtPct(r.leader?.visibility)}`}</div>
+              <div className="text-[11.5px] text-muted" title={r.answers < 20 ? `Few answers so far: the true share is within about ±${moe(r.vis, r.answers)} points.` : undefined}>{r.answers} answers{r.answers < 20 && ' · early'}</div>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // Visibility on the questions that do not name the brand: the honest measure of being recommended.
-function Discovery({ prompts, own }) {
+function unbranded(prompts, own) {
   if (!prompts) return null;
   const asked = prompts.filter(p => p.active && p.answers > 0);
   const branded = asked.filter(p => namesBrand(p.text, own));
-  if (!branded.length) return null;
   const open = asked.filter(p => !branded.includes(p));
   const n = open.reduce((t, p) => t + p.answers, 0);
-  const v = n ? open.reduce((t, p) => t + (p.visibility || 0) * p.answers, 0) / n : null;
-  return (
-    <div className="mt-4 rounded-xl border border-line bg-surface px-4 py-3 text-[13.5px]">
-      <span className="font-semibold">{v == null ? 'Add questions that do not name you' : `${fmtPct(v)} when people do not ask about ${own.name} by name`}</span>
-      <span className="text-ink2"> · {branded.length} of your {asked.length} questions contain "{own.name}", so AI names you there almost automatically. {v == null
-        ? 'The real test is a question like "best smart ring for sleep": add some on the Questions page.'
-        : `On the other ${open.length} (${n} answers) AI named ${own.name} in ${fmtPct(v)} of answers. That is the number to grow.`}</span>{' '}
-      <Link to="../prompts" className="text-accent hover:underline">Questions</Link>
-    </div>
-  );
+  if (!branded.length || !n) return null;
+  return { v: open.reduce((t, p) => t + (p.visibility || 0) * p.answers, 0) / n, n, open: open.length, branded: branded.length };
 }
 
 // The three most important open suggestions, so the overview always ends in something to do.
@@ -95,7 +216,7 @@ function NextActions({ list }) {
   const open = (list || []).filter(a => !a.status || a.status === 'open' || a.status === 'planned').slice(0, 3);
   if (!open.length) return null;
   return (
-    <div className="mt-4 rounded-xl border border-line bg-surface p-4">
+    <div className="card mt-4 p-4">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-[14px] font-semibold"><Lightbulb size={15} className="text-accent" />What to do next</span>
         <Link to="../actions" className="inline-flex items-center gap-1 text-[12.5px] text-accent hover:underline">All suggested actions<ArrowRight size={13} /></Link>
@@ -149,48 +270,6 @@ function Trends({ daily, className }) {
 
 // Margin of error of a share measured on n answers, in points (95%): AI answers vary, so a share from few answers is rough.
 const moe = (pct, n) => (pct == null || !n ? 0 : Math.round(196 * Math.sqrt((pct / 100) * (1 - pct / 100) / n)));
-
-// Rank of a brand on one metric among all tracked brands (1 = best), now and in the previous period.
-// Out of every tracked brand, so the ranks on different metrics compare; a brand with no value counts as last.
-function rankOf(brands, id, get, lowerBetter) {
-  const vals = brands.map(b => ({ id: b.id, v: get(b) })).filter(x => x.v != null);
-  if (!vals.some(x => x.id === id)) return null;
-  vals.sort((a, b) => lowerBetter ? a.v - b.v : b.v - a.v);
-  return { rank: vals.findIndex(x => x.id === id) + 1, of: brands.length };
-}
-
-// One-line status at the top of the overview, with the client's rank on each metric.
-function Headline({ s, own, days }) {
-  const d = own.prev?.visibility != null && own.visibility != null ? Math.round((own.visibility - own.prev.visibility) * 10) / 10 : null;
-  const poss = /s$/i.test(own.name) ? `${own.name}’` : `${own.name}’s`;
-  const text = d == null ? `${own.name} is named in ${fmtPct(own.visibility)} of AI answers`
-    : Math.abs(d) < 0.05 ? `${poss} visibility is unchanged vs the previous ${days} days`
-    : `${poss} visibility is ${d > 0 ? 'up' : 'down'} ${Math.abs(d)} pts vs the previous ${days} days`;
-  const metrics = [['Visibility', b => b.visibility, b => b.prev?.visibility, false], ['Sentiment', b => b.sentiment, b => b.prev?.sentiment, false], ['Position', b => b.position, b => b.prev?.position, true]];
-  return (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-xl border border-line bg-surface px-4 py-3 text-[13.5px]">
-      <span className="flex min-w-0 items-center gap-2">
-        <Home size={15} className="shrink-0 text-muted" />
-        <span className="text-muted">Overview</span><span className="text-muted">·</span>
-        <span className={`font-medium ${d > 0 ? 'text-good' : d < 0 ? 'text-bad' : ''}`}>{text}</span>
-      </span>
-      <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-muted">
-        {metrics.map(([label, now, before, lower]) => {
-          const r = rankOf(s.brands, own.id, now, lower);
-          const p = rankOf(s.brands, own.id, before, lower);
-          const better = r && p ? p.rank - r.rank : 0;
-          return (
-            <span key={label} className="inline-flex items-center gap-1">
-              {label}: <span className="font-semibold tnum text-ink">{r ? `${r.rank}/${r.of}` : 'n/a'}</span>
-              {better > 0 && <ChevronsUp size={13} className="text-good" aria-label="rank improved" />}
-              {better < 0 && <ChevronsDown size={13} className="text-bad" aria-label="rank dropped" />}
-            </span>
-          );
-        })}
-      </span>
-    </div>
-  );
-}
 
 // AI described a look-alike company when asked about the client (see the brand profile's "Not to be confused with").
 function Confusion({ c, prev, own }) {

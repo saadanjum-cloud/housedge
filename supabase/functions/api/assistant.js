@@ -50,6 +50,20 @@ export const PAGES = {
 export const OPEN_PAGE = { name: 'open_page', description: 'Shows the person a button that opens a page of the Housedge app. Use it whenever the answer involves doing something on a page, or they ask where or how to do something. Several calls are fine.',
   input_schema: { type: 'object', properties: { page: { type: 'string', enum: Object.keys(PAGES) } }, required: ['page'], additionalProperties: false } };
 
+// Charts Ask Housedge can put under its reply. The app draws them from the live data (same endpoints as the pages),
+// so a chart never shows a number the model typed.
+export const CHARTS = {
+  visibility_trend: 'visibility of each brand per day (line chart)',
+  share_of_voice_trend: 'share of voice of each brand per day (area chart)',
+  competitors: 'visibility of every tracked brand, ranked (bars)',
+  engines: 'the client\'s visibility on each AI engine (bars)',
+  sources: 'the websites AI cites most (bars)',
+  sentiment_map: 'visibility against sentiment for every brand (scatter)',
+};
+export const SHOW_CHART = { name: 'show_chart', description: `Shows a chart of the client's live data under your reply. Use it when a picture makes the point faster than numbers: trends, comparisons with competitors, engines, sources. One or two per reply; do not repeat every number of the chart in the text. Charts: ${Object.entries(CHARTS).map(([k, v]) => `${k} = ${v}`).join('; ')}.`,
+  input_schema: { type: 'object', properties: { kind: { type: 'string', enum: Object.keys(CHARTS) }, title: { type: 'string', maxLength: 80, description: 'Short title, e.g. "Visibility, last 30 days".' }, days, engine },
+    required: ['kind'], additionalProperties: false } };
+
 const filterOf = (input = {}) => M.parseFilter({ days: input.days || 30, engines: input.engine || '' });
 const clip = (s, n) => (s && s.length > n ? s.slice(0, n) + '…' : s);
 const untrusted = text => `<untrusted_ai_answer>${String(text || '').replace(/<\/?untrusted_ai_answer>/g, '')}</untrusted_ai_answer>`;

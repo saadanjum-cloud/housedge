@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Plus, Pause, Play, Trash2, Tag, Search, Info } from 'lucide-react';
 import { useApi, useFilters, api, fmtPct, fmtPos, COUNTRY_FLAGS, namesBrand } from '../lib.js';
 import { useMeta, useProject } from '../ctx.js';
-import { Card, PageHeader, Spinner, ErrorBox, Modal, Badge, Sentiment, Empty, useToast, SimBanner } from '../ui.jsx';
+import { Card, PageHeader, Spinner, ErrorBox, Modal, Badge, Sentiment, Empty, useToast, SimBanner, EngineLogo, engineName } from '../ui.jsx';
 import FilterBar from './FilterBar.jsx';
 
 export default function Prompts() {
@@ -70,7 +70,7 @@ export default function Prompts() {
             <table className="w-full">
               <thead><tr>
                 {!readOnly && <th className="th w-8"><input type="checkbox" aria-label="Select all" checked={sel.size === rows.length} onChange={() => setSel(sel.size === rows.length ? new Set() : new Set(rows.map(r => r.id)))} /></th>}
-                <th className="th">Question</th><th className="th">Market</th><th className="th">Your visibility</th><th className="th">Position</th><th className="th">Sentiment</th><th className="th">Most visible</th><th className="th">Status</th>
+                <th className="th">Question</th><th className="th">Market</th><th className="th">Your visibility</th><th className="th">By engine</th><th className="th">Position</th><th className="th">Sentiment</th><th className="th">Most visible</th><th className="th">Status</th>
               </tr></thead>
               <tbody>
                 {rows.map(p => (
@@ -82,6 +82,9 @@ export default function Prompts() {
                     </td>
                     <td className="td whitespace-nowrap text-xs">{COUNTRY_FLAGS[p.country]} {p.country}<div className="text-muted">{meta.languages[p.language] || p.language}</div></td>
                     <td className="td tnum">{fmtPct(p.visibility)}<div className="text-[11px] text-muted">{p.answers} answers</div></td>
+                    <td className="td">{p.byEngine?.length ? <div className="flex flex-col gap-1">{p.byEngine.map(x => (
+                      <span key={x.engine} className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs tnum" title={`${engineName(x.engine)}: named in ${x.visibility}% of ${x.answers} answers`}>
+                        <EngineLogo id={x.engine} size={13} />{fmtPct(x.visibility)}</span>))}</div> : <span className="text-xs text-muted">—</span>}</td>
                     <td className="td tnum whitespace-nowrap">{fmtPos(p.position, p.visibility > 0)}</td>
                     <td className="td"><Sentiment value={p.sentiment} /></td>
                     <td className="td text-xs">{p.topBrand ? <>{p.topBrand.name}<div className="text-muted tnum">{p.topBrand.visibility}%</div></> : '—'}</td>
