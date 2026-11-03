@@ -65,7 +65,7 @@ export function analyseHtml(html) {
   }
   const text = decode(html.replace(/<(script|style|noscript|svg|template)\b[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
   return {
-    title: decode((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '').trim(),
+    title: decode((html.replace(/<svg\b[\s\S]*?<\/svg>/gi, '').match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '').trim(),
     description: decode(meta('description') || '').trim(),
     robotsMeta: (meta('robots') || '').toLowerCase(),
     lang: (html.match(/<html\b[^>]*\blang\s*=\s*["']([^"']+)["']/i) || [])[1] || '',

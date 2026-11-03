@@ -106,7 +106,10 @@ function FactCheck({ project, readOnly }) {
       <p className="mt-1 text-xs text-muted">Only add facts you can confirm in writing. Answers are re-checked automatically after every real check run.</p>
       </>}
       <ErrorBox error={err} />
-      {!d.facts.length ? <p className="mt-4 text-sm text-muted">No facts yet.</p> : (
+      {!d.facts.length ? <>
+        <p className="mt-4 text-sm text-muted">No facts yet.</p>
+        {!readOnly && <SuggestedFacts project={project} existing={d.facts} onAdd={async t => { await api(`/projects/${project.id}/facts`, { method: 'POST', body: { text: t } }); r.reload(); }} />}
+      </> : (
         <ul className="mt-4 grid gap-3">
           {d.facts.map(f => (
             <li key={f.id} className="rounded-xl border border-line p-4">
@@ -132,5 +135,38 @@ function FactCheck({ project, readOnly }) {
       )}
       {d.lastChecked && <p className="mt-3 text-xs text-muted">Last checked {fmtDate(d.lastChecked)} · model {d.model}</p>}
     </Card>
+  );
+}
+
+// Facts the brand profile already states, ready to add with one click.
+const SAFE = s => String(s || '').split('\n').map(x => x.trim()).filter(Boolean)[0]?.replace(/[.\s]+$/, '') || '';
+function factsFrom(p) {
+  const n = p.name || 'The company';
+  return [
+    p.founded && `${n} was founded in ${SAFE(p.founded)}.`,
+    p.headquarters && `${n} is headquartered in ${SAFE(p.headquarters)}.`,
+    p.legalName && p.legalName !== p.name && `${n}'s legal company name is ${SAFE(p.legalName)}.`,
+    p.notConfusedWith && `${n} is not the same company as ${SAFE(p.notConfusedWith)}.`,
+    p.pricing && `Pricing: ${SAFE(p.pricing)}.`,
+    p.trust && `${SAFE(p.trust)}.`,
+  ].filter(Boolean).filter(t => t.length <= 300);
+}
+function SuggestedFacts({ project, existing, onAdd }) {
+  const r = useApi(`/projects/${project.id}/optimise`);
+  const [added, setAdded] = useState(new Set());
+  if (!r.data) return null;
+  const list = factsFrom(r.data.profile).filter(t => !added.has(t) && !existing.some(f => f.text === t));
+  return (
+    <div className="mt-3 rounded-xl border border-line p-4">
+      <div className="text-sm font-medium">From your brand profile</div>
+      {!list.length ? <p className="mt-1 text-xs text-muted">Fill in founded, headquarters, pricing or "not to be confused with" on the <Link to="../optimise" className="underline">Optimise</Link> page and the facts appear here, ready to add.</p> : (
+        <ul className="mt-2 grid gap-2">
+          {list.map(t => (
+            <li key={t} className="flex items-center justify-between gap-3 text-sm"><span>{t}</span>
+              <button className="btn-ghost btn-sm shrink-0" onClick={async () => { await onAdd(t); setAdded(new Set([...added, t])); }}><Plus size={13} />Add</button></li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

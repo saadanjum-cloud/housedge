@@ -145,7 +145,7 @@ export const SOURCE_TYPES = {
   competitor: 'Competitor website',
   brand: 'Other brands\' websites',
   review: 'Review & comparison sites',
-  forum: 'Forums & communities',
+  forum: 'Forums, communities & blogs',
   news: 'News & trade media',
   official: 'Regulators & official',
   reference: 'Reference (e.g. Wikipedia)',
@@ -157,13 +157,18 @@ const DOMAIN_TYPES = {
     'bonusetu.com', 'kasinohai.com', 'casino.org', 'casinotopsonline.com', 'johnslots.com', 'casinofeber.se',
     'slotcatalog.com', 'bigwinboard.com', 'g2.com', 'gamblingsites.com', 'covers.com', 'legalbet.com', 'kasinot.fi',
     'vegasslotsonline.com', 'casinoreviews.com', 'clutch.co', 'capterra.com', 'casinomeister.com/reviews',
-    'yelp.com', 'tripadvisor.com', 'sitejabber.com', 'reviews.io', 'producthunt.com', 'glassdoor.com', 'consumerreports.org', 'which.co.uk', 'trustradius.com', 'getapp.com'],
+    'yelp.com', 'tripadvisor.com', 'sitejabber.com', 'reviews.io', 'producthunt.com', 'glassdoor.com', 'consumerreports.org', 'which.co.uk', 'trustradius.com', 'getapp.com',
+    'tomsguide.com', 'techradar.com', 'stuff.tv', 'notebookcheck.net', 'reviewed.com', 'cnet.com', 'pcmag.com', 'wareable.com', 'androidauthority.com', 'zdnet.com',
+    'digitaltrends.com', 'engadget.com', 't3.com', 'techadvisor.com', 'trustedreviews.com', 'expertreviews.co.uk', 'rtings.com', 'gsmarena.com', 'tomshardware.com',
+    'androidcentral.com', 'imore.com', 'macrumors.com', '9to5mac.com', 'nerdwallet.com', 'moneysavingexpert.com', 'bankrate.com', 'finder.com', 'hinta.fi', 'vertaa.fi', 'tekniikanmaailma.fi', 'mobiili.fi', 'prisjakt.nu', 'pricerunner.com'],
   forum: ['reddit.com', 'quora.com', 'casinomeister.com', 'suomi24.fi', 'vauva.fi', 'flashback.org', 'stackexchange.com',
-    'linkedin.com', 'x.com', 'twitter.com', 'facebook.com', 'youtube.com'],
+    'linkedin.com', 'x.com', 'twitter.com', 'facebook.com', 'youtube.com', 'medium.com', 'substack.com', 'tiktok.com', 'instagram.com', 'threads.net'],
   news: ['igamingbusiness.com', 'sbcnews.co.uk', 'egr.global', 'gamblinginsider.com', 'yle.fi', 'hs.fi', 'reuters.com',
     'bbc.co.uk', 'bbc.com', 'nytimes.com', 'theguardian.com', 'forbes.com', 'techcrunch.com', 'wsj.com', 'ft.com', 'cnbc.com', 'businessinsider.com', 'theverge.com', 'wired.com', 'next.io', 'calvinayre.com', 'sigma.world', 'gamingintelligence.com', 'igamingtoday.com',
     'yogonet.com', 'focusgn.com', 'kauppalehti.fi', 'is.fi', 'iltalehti.fi', 'di.se', 'theguardian.com', 'ft.com',
-    'bloomberg.com', 'gambling.com', 'vixio.com', 'igamingfuture.com', 'europeangaming.eu', 'casinobeats.com'],
+    'bloomberg.com', 'gambling.com', 'vixio.com', 'igamingfuture.com', 'europeangaming.eu', 'casinobeats.com',
+    'mtvuutiset.fi', 'talouselama.fi', 'tivi.fi', 'tekniikkatalous.fi', 'svd.se', 'dn.se', 'aftonbladet.se', 'expressen.se', 'spiegel.de', 'heise.de', 'golem.de', 'telegraph.co.uk', 'independent.co.uk',
+    'washingtonpost.com', 'cnn.com', 'usatoday.com', 'apnews.com', 'axios.com', 'fastcompany.com', 'inc.com', 'entrepreneur.com', 'mashable.com', 'gizmodo.com', 'arstechnica.com', 'venturebeat.com'],
   official: ['gamblingcommission.gov.uk', 'poliisi.fi', 'spelinspektionen.se', 'gluecksspiel-behoerde.de', 'mga.org.mt',
     'finlex.fi', 'valtioneuvosto.fi', 'stm.fi', 'gov.uk', 'europa.eu', 'peluuri.fi', 'begambleaware.org', 'stodlinjen.se'],
   reference: ['wikipedia.org', 'britannica.com', 'investopedia.com'],
@@ -183,7 +188,8 @@ export function classifySource(domain, brands) {
   for (const [type, list] of Object.entries(DOMAIN_TYPES)) if (matchesDomain(domain, list)) return type;
   if (LIBRARY_DOMAINS.some(x => matchesDomain(domain, [x]))) return 'brand';
   if (/\.(gov|gouv)\.|\.gov$/.test(domain)) return 'official';
-  if (/forum|community|board/.test(domain)) return 'forum';
+  if (/forum|community|board|\bblog\b/.test(domain)) return 'forum';
+  if (/review|arvostelu|vertailu|compar|versus|wirecutter|bestof|top10|-test\b|guide\./.test(domain)) return 'review';
   if (/casino|bonus|odds|slots|kasino|betting|bet.*review/.test(domain)) return 'review';
   if (/news|times|post|herald|journal|daily/.test(domain)) return 'news';
   return 'other';
