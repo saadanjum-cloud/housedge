@@ -19,7 +19,7 @@ for (const t of tools) {
   if (!/^[a-z_]{1,64}$/.test(t.name) || !t.description || t.inputSchema?.type !== 'object' || !t.annotations?.title) throw new Error('bad tool ' + t.name);
   for (const req of t.inputSchema.required || []) if (!t.inputSchema.properties[req]) throw new Error(`required ${req} missing in ${t.name}`);
 }
-assert(tools.length === 20, `20 tools (${tools.map(t => t.name).join(', ')})`);
+assert(tools.length === 21, `21 tools (${tools.map(t => t.name).join(', ')})`);
 assert(tools.filter(t => !t.annotations.readOnlyHint).length === 6, '6 tools that change things');
 const prompts = (await (await post({ jsonrpc: '2.0', id: 3, method: 'prompts/list' })).json()).result.prompts;
 assert(prompts.map(p => p.name).join() === 'fix-website,weekly-summary', 'prompts');

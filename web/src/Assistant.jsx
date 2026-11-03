@@ -11,6 +11,7 @@ const STARTERS = [
   'Why are competitors named more often than us?',
   'Which 3 websites should we try to get listed on first?',
   'What do AI assistants say about us that is wrong?',
+  'What are competitors praised for that we are criticised for?',
   'Write a 5-line summary of this month for our CEO.',
   'How do I add a competitor?',
   'Where do I get the code for our website?',
@@ -70,7 +71,7 @@ export default function Assistant({ project }) {
     setMsgs(next); setText(''); setErr(null); setBusy(true);
     try {
       const r = await api(`/projects/${project.id}/assistant`, { method: 'POST', body: { messages: next.map(({ role, content }) => ({ role, content })) } });
-      setMsgs(m => [...m, { role: 'assistant', content: r.reply, cost: r.cost, tools: r.toolsUsed, pages: (r.pages || []).filter(x => PAGES[x]) }]);
+      setMsgs(m => [...m, { role: 'assistant', content: r.reply, cost: r.cost, tools: r.toolsUsed, changed: r.changed || [], pages: (r.pages || []).filter(x => PAGES[x]) }]);
     } catch (e) { setErr(e.message); setMsgs(m => m.slice(0, -1)); setText(question); }
     setBusy(false);
   };
@@ -89,7 +90,7 @@ export default function Assistant({ project }) {
           <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-[15px] font-bold"><Sparkles size={16} className="text-accent" />Ask Housedge</div>
-              <div className="truncate text-[11.5px] text-muted">About {project.name} only · reads data, changes nothing</div>
+              <div className="truncate text-[11.5px] text-muted">About {project.name} only · can add questions, competitors and log work when you ask</div>
             </div>
             <span className="flex items-center gap-1">
               {msgs.length > 0 && <button className="rounded-lg p-2 text-muted hover:bg-fill hover:text-ink" onClick={() => { setMsgs([]); setErr(null); }} aria-label="New conversation" title="New conversation"><RotateCcw size={15} /></button>}
@@ -117,7 +118,7 @@ export default function Assistant({ project }) {
                       <Link key={x} to={pagePath(project.id, x)} onClick={() => { if (x === 'account') setOpen(false); }}
                         className="inline-flex items-center gap-1 rounded-full border border-line px-3 py-1.5 text-[12.5px] font-medium text-ink transition-colors hover:border-accent hover:text-accent">
                         Open {PAGES[x]}<ArrowRight size={13} /></Link>))}</div>}
-                    <div className="mt-1 pl-1 text-[11px] text-muted">Looked at: {(m.tools || []).map(t => t.replace(/^get_|_/g, ' ').trim()).join(', ') || 'conversation only'}{m.cost ? ` · about $${m.cost.toFixed(3)}` : ''}</div>
+                    <div className="mt-1 pl-1 text-[11px] text-muted">{m.changed?.length ? <span className="text-accent">Changed: {m.changed.map(t => t.replace(/_/g, ' ')).join(', ')} · </span> : null}Looked at: {(m.tools || []).filter(t => !m.changed?.includes(t)).map(t => t.replace(/^get_|_/g, ' ').trim()).join(', ') || 'conversation only'}{m.cost ? ` · about $${m.cost.toFixed(3)}` : ''}</div>
                   </div>))}
               {busy && <div className="flex items-center gap-2 text-[13px] text-muted"><Loader2 size={14} className="animate-spin" />Looking at the data…</div>}
               <div ref={end} />

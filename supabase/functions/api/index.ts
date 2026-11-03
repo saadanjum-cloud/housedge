@@ -17,7 +17,7 @@ import { startRun, resumeIfStalled, EST_PER_QUESTION, RUN_MODEL } from './pipeli
 import { runSiteCheck } from './sitecheck.js';
 import { prefillFromWebsite } from './prefill.js';
 import { outreachView, addTarget, updateTarget, draftEmail } from './outreach.js';
-import { askAssistant } from './assistant.js';
+import { askHousedge } from './chat.js';
 import { serveMcp } from './mcp.js';
 import { assertCanSpend } from './spend.js';
 import { writeDraft, checkFacts } from './helpers-ai.js';
@@ -39,9 +39,10 @@ const cleanDomain = d => (d || '').trim().replace(/^https?:\/\//, '').replace(/^
 
 type Ctx = { params: Record<string, string>; query: Record<string, string>; body: any; user: any; role: string | null; after: (() => Promise<unknown>)[] };
 type Handler = (c: Ctx) => Promise<unknown>;
-const routes: { method: string; re: RegExp; handler: Handler; open?: boolean }[] = [];
-const R = (method: string, pattern: string, handler: Handler, open = false) =>
-  routes.push({ method, re: new RegExp('^' + pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)') + '$'), handler, open });
+const routes: { method: string; re: RegExp; handler: Handler; open?: boolean; notx?: boolean }[] = [];
+// notx: the handler runs outside the request transaction (it opens its own short ones), e.g. a long chat with Claude.
+const R = (method: string, pattern: string, handler: Handler, open = false, notx = false) =>
+  routes.push({ method, re: new RegExp('^' + pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)') + '$'), handler, open, notx });
 
 // The team has read-only access to client data. These are the only changes a team account may make: its own
 // workspace (account settings, enquiries, the team, follow-ups) and the reports it writes for clients.
@@ -646,12 +647,12 @@ R('POST', '/outreach/:id/email', async c => {
 
 // ---------------------------------------------------------------- Ask Housedge: chat over one client's data (read-only)
 R('POST', '/projects/:id/assistant', async c => {
-  const p = await projectOr404(c.params.id);
   const key = Deno.env.get('ANTHROPIC_API_KEY');
   if (!key) throw fail('Ask Housedge is not connected yet.', 503);
-  const r = await askAssistant(p, c.body.messages, { apiKey: key, userId: c.user.id });
-  return { reply: r.reply, toolsUsed: [...new Set(r.toolsUsed)], pages: r.pages, cost: Math.round(r.cost * 10000) / 10000 };
-});
+  const p = await asUser(c.user, async (role: string | null) => { c.role = role; return projectOr404(c.params.id); });
+  const r = await askHousedge(p, c.user, c.role, c.body.messages, { apiKey: key, dispatch });
+  return { reply: r.reply, toolsUsed: [...new Set(r.toolsUsed)], changed: [...new Set(r.changed)], pages: r.pages, cost: Math.round(r.cost * 10000) / 10000 };
+}, false, true);
 
 // ---------------------------------------------------------------- schedule (called every hour by the database's pg_cron)
 // Only the database knows the secret (kept in Supabase Vault and as the CRON_SECRET function secret). Each tick:
@@ -940,7 +941,7 @@ Deno.serve(async req => {
     if (!user && !route.open) return json({ error: 'Please log in.' }, 401);
     t.push(performance.now());
     const ctx: Ctx = { params, query: Object.fromEntries(url.searchParams), body: body && typeof body === 'object' ? body : {}, user, role: null, after: [] };
-    const out = user ? await asUser(user, (role: string | null) => {
+    const out = route.notx ? await route.handler(ctx) : user ? await asUser(user, (role: string | null) => {
       ctx.role = role;
       if (role && req.method !== 'GET' && !TEAM_WRITES.some(re => re.test(path))) throw fail('Team accounts have read-only access to client dashboards.', 403);
       return route.handler(ctx);

@@ -38,10 +38,10 @@ const obj = (properties = {}, required = []) => ({ type: 'object', properties: {
 const READ = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const WRITE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
 const TITLES = { get_overview: 'Visibility overview', get_engines: 'Visibility per AI assistant', get_questions: 'Tracked questions', get_sources: 'Websites AI cites',
-  search_answers: 'Read AI answers', get_actions: 'Suggested actions', get_facts: 'Fact check', get_outreach: 'Outreach list' };
+  search_answers: 'Read AI answers', get_actions: 'Suggested actions', get_facts: 'Fact check', get_outreach: 'Outreach list', get_perception: 'What AI praises and criticises' };
 
 // x = { project(): the chosen project, call(method, path, body): one of the app's API routes as this person }
-const TOOLS = [
+export const TOOLS = [
   { name: 'list_projects', title: 'Your Housedge projects', annotations: READ,
     description: 'Projects (tracked brands) this account can see: id, brand, website, competitors, active questions, last check and schedule. Use the id as project_id in other tools.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -160,7 +160,8 @@ const PROMPTS = [
 // ---------------------------------------------------------------- JSON-RPC over HTTP
 const rpcError = (code, message) => Object.assign(new Error(message), { rpc: code });
 
-async function callTool(user, name, args, dispatch) {
+// Also used by the in-app chat (chat.js): each tool call is its own short transaction as the signed-in person.
+export async function callTool(user, name, args, dispatch) {
   const t = TOOLS.find(x => x.name === name);
   if (!t) throw rpcError(-32602, `Unknown tool: ${name}`);
   const after = [];
