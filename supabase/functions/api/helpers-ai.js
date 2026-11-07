@@ -220,7 +220,7 @@ export async function writeSocialPost(project, { promptId, platform, topic, angl
 // platform in parallel, then Claude turns the findings into themes and post ideas. Only addresses Google actually
 // returned are kept, so no post in the results is made up. Runs outside a request transaction (about a minute).
 // ponytail: four platforms, one search call each; add X/TikTok when Google's index of them proves useful.
-export const SCAN_PLATFORMS = ['reddit', 'linkedin', 'youtube', 'quora'];
+export const SCAN_PLATFORMS = ['reddit', 'youtube', 'quora']; // linkedin: not searchable (see SCAN_SEARCH), so not scanned or shown
 // How each platform is searched (tested Nov 2026). Google Search (Gemini grounding) finds Reddit, YouTube and Quora
 // posts when every query carries the platform's name. Claude's search cannot reach Reddit (blocked) and finds
 // nothing on YouTube or LinkedIn. LinkedIn returns nothing through Google either: null = cannot be searched yet.

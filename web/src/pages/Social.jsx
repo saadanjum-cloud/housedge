@@ -9,7 +9,7 @@ import { useProject } from '../ctx.js';
 import { Card, PageHeader, Spinner, ErrorBox, Badge, SimBanner, Segmented, Empty, EngineLogo, PlatformLogo, useToast } from '../ui.jsx';
 import FilterBar from './FilterBar.jsx';
 
-const SCAN_PLATFORMS = ['reddit', 'linkedin', 'youtube', 'quora'];
+const SCAN_PLATFORMS = ['reddit', 'youtube', 'quora']; // LinkedIn cannot be searched (Nov 2026), so it is not shown
 const SCAN_LABEL = { reddit: 'Reddit', linkedin: 'LinkedIn', youtube: 'YouTube', quora: 'Quora' };
 const SENT = { positive: 'good', mixed: 'warn', negative: 'bad', neutral: 'default' };
 const OWNER = { own: ['Yours', 'accent'], competitor: ['Competitor', 'bad'], third: ['Third party', 'default'] };
@@ -55,7 +55,7 @@ export default function Social() {
   const otherDrafts = d ? d.drafts.filter(x => !(d.scan?.ideas || []).some(i => draftOf([x], i))) : [];
   return (
     <>
-      <PageHeader title="Social" subtitle={`Find the conversations about your market on Reddit, LinkedIn, YouTube and Quora, see where competitors get recommended and ${own} does not, and publish posts that fill the gap.`}
+      <PageHeader title="Social" subtitle={`Find the conversations about your market on Reddit, YouTube and Quora, see where competitors get recommended and ${own} does not, and publish posts that fill the gap.`}
         right={scanBtn} />
       {d && <PlatformBar scan={d.scan} own={own} plat={plat} setPlat={setPlat} />}
       <ErrorBox error={scanErr} />
@@ -64,7 +64,7 @@ export default function Social() {
         <div className="grid gap-4">
           {scanning ? <ScanProgress own={own} competitors={project.brands.filter(b => !b.is_own).length} state={scanning} /> : (
             !d.scan && <Step n={1} title="Scan the platforms"
-              subtitle={`Google Search looks through each platform for posts about your market, ${own} and your competitors, and Claude reads what it finds. About a minute. Nothing is posted anywhere.`}>
+              subtitle={`Google Search looks through Reddit, YouTube and Quora for posts about your market, ${own} and your competitors, and Claude reads what it finds. About a minute. Nothing is posted anywhere.`}>
               {readOnly ? <p className="text-sm text-muted">The client runs the scan.</p> : <p className="text-sm text-ink2">No scan yet. Press <b>Scan now</b> to start.</p>}
             </Step>
           )}
@@ -94,7 +94,7 @@ function PlatformBar({ scan, own, plat, setPlat }) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
       <button className={`chip ${!plat ? 'chip-on' : ''}`} onClick={() => setPlat('')}>All platforms</button>
-      {rows.map(r => {
+      {rows.filter(r => !r.unavailable).map(r => {
         const p = scan?.platforms.find(x => x.platform === r.platform);
         const named = p ? p.posts.filter(x => x.brands.some(b => same(b, own))).length : 0;
         const missing = p ? p.posts.filter(x => x.brands.length && !x.brands.some(b => same(b, own))).length : 0;
@@ -113,8 +113,9 @@ function PlatformBar({ scan, own, plat, setPlat }) {
 function ScanProgress({ own, competitors, state }) {
   const [secs, setSecs] = useState(0);
   useEffect(() => { const t = setInterval(() => setSecs(x => x + 1), 1000); return () => clearInterval(t); }, []);
-  const done = SCAN_PLATFORMS.filter(p => state.steps[p] !== 'searching').length;
-  const finished = done + (state.reading ? 0.5 : 0), total = SCAN_PLATFORMS.length + 1;
+  const live = SCAN_PLATFORMS.filter(p => state.steps[p] !== 'unavailable');
+  const done = live.filter(p => state.steps[p] !== 'searching').length;
+  const finished = done + (state.reading ? 0.5 : 0), total = live.length + 1;
   const Row = ({ status, logo, children }) => (
     <li className="flex items-center gap-3 rounded-xl px-3 py-2.5" style={{ background: status === 'done' ? 'var(--fill)' : 'transparent' }}>
       <span className="grid h-5 w-5 shrink-0 place-items-center">
@@ -131,16 +132,16 @@ function ScanProgress({ own, competitors, state }) {
         <span className="shrink-0 animate-pulse"><Logo size={44} /></span>
         <div className="min-w-0">
           <h2 className="text-[20px] font-bold tracking-display md:text-[22px]">Reading what people say about {own} on social media</h2>
-          <p className="mt-1 max-w-3xl text-[14px] text-muted">Google Search is looking through Reddit, LinkedIn, YouTube and Quora for posts about {own}'s market, {own} itself and its {competitors || ''} competitors. Claude then reads what was found, sums up each platform, and suggests the posts you should make. About a minute. Stay on this page.</p>
+          <p className="mt-1 max-w-3xl text-[14px] text-muted">Google Search is looking through Reddit, YouTube and Quora for posts about {own}'s market, {own} itself and its {competitors || ''} competitors. Claude then reads what was found, sums up each platform, and suggests the posts you should make. About a minute. Stay on this page.</p>
         </div>
       </div>
       <div className="mt-6 flex items-center gap-3">
         <div className="h-2 flex-1 overflow-hidden rounded-full bg-fill"><div className="h-full rounded-full bg-accent transition-all duration-700" style={{ width: `${Math.max(4, (100 * finished) / total)}%` }} /></div>
-        <span className="text-[13px] font-semibold tnum">{done} of {SCAN_PLATFORMS.length} platforms</span>
+        <span className="text-[13px] font-semibold tnum">{done} of {live.length} platforms</span>
         <span className="text-[13px] text-muted tnum">{Math.floor(secs / 60)}:{String(secs % 60).padStart(2, '0')}</span>
       </div>
       <ul className="mt-6 grid gap-1.5">
-        {SCAN_PLATFORMS.map(p => { const st = state.steps[p]; return (
+        {SCAN_PLATFORMS.filter(p => state.steps[p] !== 'unavailable').map(p => { const st = state.steps[p]; return (
           <Row key={p} status={st === 'searching' ? 'working' : st === 'failed' || st === 'unavailable' ? 'failed' : 'done'} logo={<PlatformLogo id={p} size={14} />}>
             <span className="font-medium">{SCAN_LABEL[p]}</span><span className="ml-2 text-muted">{st === 'searching' ? 'searching…' : st === 'unavailable' ? 'cannot be searched yet' : st === 'failed' ? 'the search failed' : st === 0 ? 'nothing relevant found' : `${st} posts found`}</span>
           </Row>); })}
