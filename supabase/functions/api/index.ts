@@ -20,7 +20,7 @@ import { outreachView, addTarget, updateTarget, draftEmail } from './outreach.js
 import { askHousedge } from './chat.js';
 import { serveMcp } from './mcp.js';
 import { assertCanSpend } from './spend.js';
-import { writeDraft, checkFacts, writeSocialPost } from './helpers-ai.js';
+import { writeDraft, checkFacts, writeSocialPost, scanSocial, latestScan } from './helpers-ai.js';
 import { socialView } from './social.js';
 import Anthropic from 'npm:@anthropic-ai/sdk@0.133.0';
 import { workLog, interventionInput, createIntervention, updateIntervention, KINDS, WINDOW_DAYS } from './interventions.js';
@@ -574,7 +574,12 @@ R('GET', '/projects/:id/engines', metric((p, f) => M.perEngine(p.id, f)));
 R('GET', '/projects/:id/countries', metric((p, f) => M.visibilityByCountry(p.id, f)));
 R('GET', '/projects/:id/perception', metric((p, f) => M.perception(p.id, f)));
 R('GET', '/projects/:id/sources', metric((p, f) => M.sources(p.id, f)));
-R('GET', '/projects/:id/social', metric((p, f) => socialView(p.id, f)));
+R('GET', '/projects/:id/social', metric(async (p, f) => ({ ...(await socialView(p.id, f)), scan: await latestScan(p.id) })));
+// The scan searches four platforms and runs about a minute: outside the request transaction, access checked first.
+R('POST', '/projects/:id/social/scan', async c => {
+  const p = await asUser(c.user, async (role: string | null) => { c.role = role; if (role) throw fail('Team accounts have read-only access to client dashboards.', 403); return projectOr404(c.params.id); });
+  return scanSocial(p);
+}, false, true);
 R('POST', '/projects/:id/social/posts', async c => ({ id: await writeSocialPost(await projectOr404(c.params.id), c.body || {}) }));
 R('GET', '/projects/:id/chats', metric((p, f, c) => M.chats(p.id, { ...f, promptId: Number(c.query.prompt) || undefined }, {
   limit: Math.min(100, Math.max(1, Math.floor(Number(c.query.limit)) || 20)), offset: Math.min(1e6, Math.max(0, Math.floor(Number(c.query.offset)) || 0)),

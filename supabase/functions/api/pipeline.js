@@ -46,7 +46,7 @@ export const runnableEngines = chosen => IMPLEMENTED.filter(e => (chosen || []).
 const setting = async k => (await db(() => get('SELECT value FROM settings WHERE key = ?', k)))?.value ?? null;
 // Per engine: the model (Settings can override it) and, for Gemini, where search comes from:
 // 'native' = Google Search grounding (closest to the Gemini app), 'exa' = OpenRouter's own search (avoids Google's grounding terms).
-async function engineConfig(engine) {
+export async function engineConfig(engine) {
   if (engine === 'claude') return { model: RUN_MODEL };
   const model = (await setting(ENGINES[engine].modelSetting)) || ENGINES[engine].defaultModel;
   const search = engine === 'gemini' && (await setting('search_gemini')) === 'exa' ? 'exa' : 'native';
