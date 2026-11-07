@@ -274,7 +274,7 @@ export async function scanSocial(project, { emit = () => {} } = {}) {
   if (!p.name) throw fail('Add the brand name on the Brand & website page first.');
   const conf = await asService(() => engineConfig('gemini'));
   const until = Date.now() + 100_000;
-  const searched = await Promise.allSettled(SCAN_PLATFORMS.map(async platform => {
+  const searchOne = async platform => {
     const { label, hosts } = PLATFORMS[platform];
     const r = await askOpenRouter('gemini', `Search Google for ${label} posts (use site:${hosts[0]} in your searches) where people discuss the market of ${p.name}` +
       `${p.category ? ` (${p.category})` : ''}, ${p.name} itself, and these competitors: ${competitors.join(', ') || 'none listed'}.\n` +
@@ -288,7 +288,8 @@ export async function scanSocial(project, { emit = () => {} } = {}) {
     await Promise.all(posts.map(async c => { const o = isJustDomain(c.title) ? await oembed(platform, c.url) : null; if (o?.title) c.title = o.title; if (o?.author) c.author = o.author; }));
     emit({ t: 'platform', platform, posts: posts.length });
     return { platform, label, notes: r.text.slice(0, 6000), posts, cost: r.cost };
-  }.call().catch(e => { emit({ t: 'platform', platform, posts: 0, failed: true }); throw e; })));
+  };
+  const searched = await Promise.allSettled(SCAN_PLATFORMS.map(platform => searchOne(platform).catch(e => { emit({ t: 'platform', platform, posts: 0, failed: true }); throw e; })));
   const ok = searched.filter(x => x.status === 'fulfilled').map(x => x.value).filter(x => x.posts.length);
   if (!ok.length) {
     const why = searched.find(x => x.status === 'rejected')?.reason?.message;
