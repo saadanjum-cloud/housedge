@@ -188,3 +188,15 @@ export function EngineLogo({ id, size = 16 }) {
     </span>
   );
 }
+
+// A social platform's logo (web/public/logos, Simple Icons: black marks, so on the same white disc as the engines).
+const PLATFORM = { reddit: 'Reddit', youtube: 'YouTube', linkedin: 'LinkedIn', quora: 'Quora', x: 'X', tiktok: 'TikTok', instagram: 'Instagram', facebook: 'Facebook', medium: 'Medium', substack: 'Substack', threads: 'Threads', pinterest: 'Pinterest' };
+export function PlatformLogo({ id, size = 16, label = false }) {
+  if (!PLATFORM[id]) return label ? <span>{id}</span> : null;
+  const disc = (
+    <span title={PLATFORM[id]} className="inline-grid shrink-0 place-items-center rounded-full bg-white ring-1 ring-black/10" style={{ width: size + 6, height: size + 6 }}>
+      <img src={`/logos/${id}.svg`} alt={PLATFORM[id]} width={size - 4} height={size - 4} loading="lazy" />
+    </span>
+  );
+  return label ? <span className="inline-flex items-center gap-1.5">{disc}<span>{PLATFORM[id]}</span></span> : disc;
+}

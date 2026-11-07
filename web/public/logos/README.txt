@@ -7,3 +7,8 @@ The shapes and colours are not altered; chatgpt.svg only sets the fill to black 
 The logos themselves are trademarks of their owners (OpenAI, Google, Perplexity AI, Anthropic).
 They are used only to say truthfully which assistants Housedge tracks: same small size for all,
 never larger than the Housedge logo, no "partner"/"powered by" wording, and a trademark note under them.
+
+Social platform logos (Social page: where posts were found). Files: reddit, youtube, quora, x, tiktok, instagram,
+facebook, medium, substack, threads, pinterest from Simple Icons 15.0.0 (CC0 1.0, https://simpleicons.org), shapes
+unaltered, drawn in the current text colour. linkedin.svg is a plain "in" tile drawn here (LinkedIn is not in Simple
+Icons). Same rules as above: small, same size for all, only to say truthfully which platforms were searched.

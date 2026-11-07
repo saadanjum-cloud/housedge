@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ExternalLink, WandSparkles, Copy, Trash2, FileText, AlertTriangle, Radar } from 'lucide-react';
 import { useApi, useFilters, api, safeHref, fmtDate } from '../lib.js';
 import { useProject } from '../ctx.js';
-import { Card, PageHeader, Spinner, ErrorBox, Badge, SimBanner, Segmented, Stat, Empty, EngineLogo, useToast } from '../ui.jsx';
+import { Card, PageHeader, Spinner, ErrorBox, Badge, SimBanner, Segmented, Stat, Empty, EngineLogo, PlatformLogo, useToast } from '../ui.jsx';
 import FilterBar from './FilterBar.jsx';
 
 const OWNER = { own: ['Yours', 'accent'], competitor: ['Competitor', 'bad'], third: ['Third party', 'default'] };
@@ -61,7 +61,7 @@ export default function Social() {
                   const you = p.brands.find(b => b.own), top = p.brands.find(b => !b.own);
                   return (
                     <tr key={p.platform}>
-                      <td className="td font-medium">{p.label}</td>
+                      <td className="td font-medium"><PlatformLogo id={p.platform} label /></td>
                       <td className="td tnum">{p.share}%</td>
                       {d.engines.map(e => <td key={e} className={`td tnum ${p.byEngine[e] ? '' : 'text-muted'}`}>{p.byEngine[e]}%</td>)}
                       <td className={`td tnum ${top && you && you.rate < top.rate ? 'font-medium text-bad' : ''}`}>{you ? `${you.rate}%` : '—'}</td>
@@ -102,9 +102,37 @@ function Scan({ scan, project, readOnly, reload }) {
     catch (e) { setErr(e); }
     setBusy(-1);
   };
+  const [missing, setMissing] = useState(false);
   const cur = scan.platforms.find(p => p.platform === open);
+  const own = scan.brands[0];
+  const isOwn = b => String(b).toLowerCase().replace(/[^a-z0-9]/g, '') === String(own).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const lacking = p => p.posts.filter(x => x.brands.length && !x.brands.some(isOwn)); // posts that name a brand, but not you
   return (
     <>
+      <Card className="mb-4" pad={false} title="Where you are missing" subtitle={`Posts found by the scan of ${fmtDate(scan.at)} that name a brand. Where competitors are named and ${own} is not, there is a conversation to join.`}>
+        <div className="overflow-x-auto px-2 pb-2">
+          <table className="w-full">
+            <thead><tr><th className="th">Platform</th><th className="th">Posts found</th><th className="th">Name you</th><th className="th">Name competitors only</th><th className="th">Most named competitor</th></tr></thead>
+            <tbody>
+              {scan.platforms.map(p => {
+                const you = p.posts.filter(x => x.brands.some(isOwn)).length, lack = lacking(p);
+                const count = new Map();
+                for (const x of lack) for (const b of x.brands) count.set(b, (count.get(b) || 0) + 1);
+                const top = [...count].sort((a, b) => b[1] - a[1])[0];
+                return (
+                  <tr key={p.platform} className="cursor-pointer hover:bg-fill" onClick={() => { setOpen(p.platform); setMissing(lack.length > 0); }}>
+                    <td className="td font-medium"><PlatformLogo id={p.platform} label /></td>
+                    <td className="td tnum">{p.posts.length}</td>
+                    <td className="td tnum">{you}</td>
+                    <td className={`td tnum ${lack.length > you ? 'font-medium text-bad' : ''}`}>{lack.length}</td>
+                    <td className="td text-sm">{top ? <>{top[0]} <span className="tnum text-muted">{top[1]}×</span></> : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
       <Card className="mb-4" title="Posts you should make" subtitle={`From the scan of ${fmtDate(scan.at)}: where people ask things your competitors get recommended for, or misunderstand you.`}>
         <ErrorBox error={err} />
         {!scan.ideas.length ? <p className="text-sm text-muted">The scan found nothing worth posting about yet.</p> : (
@@ -113,7 +141,7 @@ function Scan({ scan, project, readOnly, reload }) {
               <li key={n} className="rounded-xl border border-line p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2"><Badge tone="accent">{i.label}</Badge><span className="text-xs text-muted">#{n + 1}</span></div>
+                    <div className="flex flex-wrap items-center gap-2"><PlatformLogo id={i.platform} size={14} label /><span className="text-xs text-muted">#{n + 1}</span></div>
                     <div className="mt-1.5 font-medium">{i.title}</div>
                     <p className="mt-1 text-[13px] text-ink2">{i.angle}</p>
                     <p className="mt-1 text-xs text-muted">Why: {i.why}</p>
@@ -130,17 +158,23 @@ function Scan({ scan, project, readOnly, reload }) {
       <Card className="mb-4" pad={false} title="What people say" subtitle={scan.failed?.length ? `${scan.failed.join(', ')}: the search failed this time.` : 'Trends and posts found on each platform.'}
         right={<Segmented size="sm" value={open} onChange={setOpen} options={scan.platforms.map(p => ({ value: p.platform, label: p.label }))} />}>
         {cur && <div className="px-5 pb-4">
-          <p className="pt-4 text-sm text-ink2">{cur.summary}</p>
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-4">
+            <PlatformLogo id={cur.platform} size={18} label />
+            <label className="flex items-center gap-1.5 text-xs text-muted"><input type="checkbox" checked={missing} onChange={e => setMissing(e.target.checked)} />Only posts where you are missing ({lacking(cur).length})</label>
+          </div>
+          <p className="mt-2 text-sm text-ink2">{cur.summary}</p>
           {cur.themes.length > 0 && <ul className="mt-3 grid gap-1 text-sm sm:grid-cols-2">{cur.themes.map(t => <li key={t} className="rounded-lg bg-fill px-3 py-1.5">{t}</li>)}</ul>}
           <ul className="mt-3">
-            {cur.posts.map(p => (
+            {(missing ? lacking(cur) : cur.posts).map(p => (
               <li key={p.url} className="flex items-start justify-between gap-3 border-t border-line py-2.5 text-sm">
-                <div className="min-w-0">
+                <PlatformLogo id={cur.platform} size={14} />
+                <div className="min-w-0 flex-1">
                   <a href={safeHref(p.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:underline"><span className="truncate">{p.title || p.url}</span><ExternalLink size={11} className="shrink-0 text-muted" /></a>
                   {p.what && <p className="mt-0.5 text-[13px] text-ink2">{p.what}</p>}
                   <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
                     <Badge>{p.kind}</Badge>{p.community && <span>{p.community}</span>}{p.handle && <span>@{p.handle}</span>}
-                    {p.brands.length > 0 && <span>· names {p.brands.join(', ')}</span>}
+                    {p.brands.length > 0 && <span>· names {p.brands.map(b => <b key={b} className={isOwn(b) ? 'text-accent' : 'text-bad'}>{b}</b>).reduce((a, x) => (a === null ? [x] : [...a, ', ', x]), null)}</span>}
+                    {p.brands.length > 0 && !p.brands.some(isOwn) && <Badge tone="bad">you are missing</Badge>}
                   </div>
                 </div>
                 {p.sentiment && <Badge tone={SENT[p.sentiment]}>{p.sentiment}</Badge>}
@@ -161,7 +195,7 @@ function Post({ p }) {
           <span className="truncate">{p.title || p.url}</span><ExternalLink size={11} className="shrink-0 text-muted" />
         </a>
         <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-          <Badge>{p.label} {p.kind}</Badge><Badge tone={OWNER[p.owner][1]}>{OWNER[p.owner][0]}</Badge>
+          <PlatformLogo id={p.platform} size={12} /><Badge>{p.label} {p.kind}</Badge><Badge tone={OWNER[p.owner][1]}>{OWNER[p.owner][0]}</Badge>
           {p.community && <span>{p.community}</span>}{p.handle && <span>@{p.handle}</span>}
           <span>{fmtDate(p.first)}{p.last !== p.first && ` – ${fmtDate(p.last)}`}</span>
           {p.brands.length > 0 && <span>· names {p.brands.map(b => `${b.name} ${b.rate}%`).join(', ')}</span>}
@@ -195,7 +229,7 @@ function Ideas({ project, ideas, readOnly, reload }) {
             <li key={`${i.promptId}|${i.platform}`} className="rounded-xl border border-line p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2"><Badge tone="accent">{i.label}</Badge><span className="text-xs text-muted">impact {i.score}</span></div>
+                  <div className="flex flex-wrap items-center gap-2"><PlatformLogo id={i.platform} size={14} label /><span className="text-xs text-muted">impact {i.score}</span></div>
                   <div className="mt-1.5 font-medium">{i.question}</div>
                   <p className="mt-1 text-[13px] text-ink2">
                     {i.answers} of {i.ofAnswers} answers cite {i.label}
@@ -210,7 +244,7 @@ function Ideas({ project, ideas, readOnly, reload }) {
               {i.examples.length > 0 && <ul className="mt-2 grid gap-1 text-xs">
                 {i.examples.map(e => (
                   <li key={e.url} className="flex min-w-0 items-center gap-1.5 text-muted">
-                    <Badge tone={OWNER[e.owner][1]}>{OWNER[e.owner][0]}</Badge>
+                    <PlatformLogo id={e.platform} size={11} /><Badge tone={OWNER[e.owner][1]}>{OWNER[e.owner][0]}</Badge>
                     <a href={safeHref(e.url)} target="_blank" rel="noopener noreferrer" className="truncate hover:underline">{e.title || e.url}</a>
                   </li>
                 ))}
@@ -247,7 +281,7 @@ function Draft({ d, onDelete }) {
         <button className="flex min-w-0 items-center gap-2 text-left" onClick={() => setOpen(o => !o)} aria-expanded={open}>
           <FileText size={15} className="shrink-0 text-muted" />
           <span className="truncate text-sm font-medium">{d.title}</span>
-          <Badge>{d.platform}</Badge><Badge tone="warn">Draft</Badge>
+          <PlatformLogo id={d.platform} size={13} label /><Badge tone="warn">Draft</Badge>
         </button>
         <span className="flex items-center gap-2 text-xs text-muted">
           {fmtDate(d.created_at)}
