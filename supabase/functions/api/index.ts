@@ -20,7 +20,8 @@ import { outreachView, addTarget, updateTarget, draftEmail } from './outreach.js
 import { askHousedge } from './chat.js';
 import { serveMcp } from './mcp.js';
 import { assertCanSpend } from './spend.js';
-import { writeDraft, checkFacts } from './helpers-ai.js';
+import { writeDraft, checkFacts, writeSocialPost } from './helpers-ai.js';
+import { socialView } from './social.js';
 import Anthropic from 'npm:@anthropic-ai/sdk@0.133.0';
 import { workLog, interventionInput, createIntervention, updateIntervention, KINDS, WINDOW_DAYS } from './interventions.js';
 
@@ -573,6 +574,8 @@ R('GET', '/projects/:id/engines', metric((p, f) => M.perEngine(p.id, f)));
 R('GET', '/projects/:id/countries', metric((p, f) => M.visibilityByCountry(p.id, f)));
 R('GET', '/projects/:id/perception', metric((p, f) => M.perception(p.id, f)));
 R('GET', '/projects/:id/sources', metric((p, f) => M.sources(p.id, f)));
+R('GET', '/projects/:id/social', metric((p, f) => socialView(p.id, f)));
+R('POST', '/projects/:id/social/posts', async c => ({ id: await writeSocialPost(await projectOr404(c.params.id), c.body || {}) }));
 R('GET', '/projects/:id/chats', metric((p, f, c) => M.chats(p.id, { ...f, promptId: Number(c.query.prompt) || undefined }, {
   limit: Math.min(100, Math.max(1, Math.floor(Number(c.query.limit)) || 20)), offset: Math.min(1e6, Math.max(0, Math.floor(Number(c.query.offset)) || 0)),
   brandId: Number(c.query.brand) || null, q: typeof c.query.q === 'string' ? c.query.q.slice(0, 200) : '',

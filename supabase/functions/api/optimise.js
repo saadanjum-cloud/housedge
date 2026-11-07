@@ -100,7 +100,7 @@ export function llmsTxt(p) {
 }
 
 const withItems = d => (d.kind === 'faq' ? { ...d, items: parseJSON(d.body, []) } : d);
-export const listDrafts = async projectId => (await all('SELECT * FROM drafts WHERE project_id = ? ORDER BY id DESC', projectId)).map(withItems);
+export const listDrafts = async projectId => (await all(`SELECT * FROM drafts WHERE project_id = ? AND kind NOT LIKE 'social\\_%' ORDER BY id DESC`, projectId)).map(withItems);
 
 export async function optimiseView(projectId) {
   const profile = await readProfile(projectId);

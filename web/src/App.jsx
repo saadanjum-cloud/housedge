@@ -5,7 +5,7 @@ import { Logo, PageIn, Skeleton } from './motion.jsx';
 import { Routes, Route, Navigate, NavLink, Outlet, useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, MessageSquareText, Link2, Users, ListChecks, FileText, Settings, Plus, FolderKanban,
-  Sun, Moon, Monitor, LogOut, Check, Inbox, Globe, Play, Loader2, Download, Route as RouteIcon, ClipboardList, Lightbulb, ListTodo, Send, Menu, X, ShieldCheck, WandSparkles, Gauge, BotMessageSquare,
+  Sun, Moon, Monitor, LogOut, Check, Inbox, Globe, Play, Loader2, Download, Route as RouteIcon, ClipboardList, Lightbulb, ListTodo, Send, Menu, X, ShieldCheck, WandSparkles, Gauge, BotMessageSquare, Share2,
 } from 'lucide-react';
 import { api, authHeaders, useApi, setTheme, useDark, useFilters, fmtDate, PREVIEW, signOut, useIdleSignOut, hasSavedSession, nextPath } from './lib.js';
 import { Spinner, SimBadge, Badge, ErrorBox, useToast, Segmented, EngineLogo, engineName } from './ui.jsx';
@@ -22,6 +22,7 @@ const Discovery = lazy(() => import('./pages/Discovery.jsx'));
 const Prompts = lazy(() => import('./pages/Prompts.jsx'));
 const Competitors = lazy(() => import('./pages/Competitors.jsx'));
 const Sources = lazy(() => import('./pages/Sources.jsx'));
+const Social = lazy(() => import('./pages/Social.jsx'));
 const Chats = lazy(() => import('./pages/Chats.jsx'));
 const Actions = lazy(() => import('./pages/Actions.jsx'));
 const Reports = lazy(() => import('./pages/Reports.jsx'));
@@ -121,6 +122,7 @@ function Authed({ user, bare, children }) {
                 <Route path="prompts" element={<Prompts />} />
                 <Route path="competitors" element={<Competitors />} />
                 <Route path="sources" element={<Sources />} />
+                <Route path="social" element={<Social />} />
                 <Route path="chats" element={<Chats />} />
                 <Route path="ask" element={<Ask />} />
                 <Route path="actions" element={<Actions />} />
@@ -214,6 +216,7 @@ function Shell({ user }) {
       { to: `/p/${pid}/prompts`, label: 'Questions', icon: ListChecks },
       { to: `/p/${pid}/competitors`, label: 'Competitors', icon: Users },
       { to: `/p/${pid}/sources`, label: 'Sources', icon: Link2 },
+      { to: `/p/${pid}/social`, label: 'Social', icon: Share2 },
     ] },
     { group: 'Improve', items: [
       { to: `/p/${pid}/actions`, label: 'Suggested actions', icon: Lightbulb },
