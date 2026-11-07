@@ -1,10 +1,10 @@
 // Outreach: the websites AI cites where the client is missing, with a status per site and honest email drafts.
 // Housedge never sends anything: people decide, write and send.
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, Mail, Copy, ChevronDown, ChevronUp, ExternalLink, Info, WandSparkles } from 'lucide-react';
+import { Plus, Trash2, Mail, Copy, ChevronDown, ChevronUp, ExternalLink, Info } from 'lucide-react';
 import { useApi, api, useFilters, fmtDate, safeHref } from '../lib.js';
 import { useProject } from '../ctx.js';
-import { PageHeader, Card, Spinner, ErrorBox, Empty, useToast } from '../ui.jsx';
+import { PageHeader, Card, Spinner, ErrorBox, Empty, useToast, EngineLogo } from '../ui.jsx';
 import FilterBar from './FilterBar.jsx';
 
 // Colour of the status picker, so the list can be scanned at a glance.
@@ -160,7 +160,7 @@ function Item({ item, statuses, call }) {
             <textarea id={`o-${item.id}-notes`} className="input" rows={2} value={f.notes || ''} onChange={e => setF({ ...f, notes: e.target.value })} /></div>
           <div className="flex flex-wrap items-center gap-2">
             <button className="btn-primary btn-sm" onClick={() => save()} disabled={!!busy}>{busy === 'save' ? 'Saving…' : 'Save'}</button>
-            <button className={`btn-ghost btn-sm ${busy === 'email' ? 'shimmer' : ''}`} onClick={email} disabled={!!busy}><WandSparkles size={13} />{busy === 'email' ? 'Writing…' : f.email_body ? 'Rewrite email' : 'Write email with Claude'}</button>
+            <button className={`btn-ghost btn-sm ${busy === 'email' ? 'shimmer' : ''}`} onClick={email} disabled={!!busy}><EngineLogo id="claude" size={11} />{busy === 'email' ? 'Writing…' : f.email_body ? 'Rewrite email' : 'Write email with Claude'}</button>
             {f.contact_url && <a className="btn-ghost btn-sm" href={safeHref(f.contact_url)} target="_blank" rel="noopener noreferrer"><ExternalLink size={13} />Contact page</a>}
             <button className="ml-auto text-muted hover:text-bad" onClick={remove} aria-label={`Remove ${item.domain}`}><Trash2 size={15} /></button>
           </div>

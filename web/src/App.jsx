@@ -5,7 +5,7 @@ import { Logo, PageIn, Skeleton } from './motion.jsx';
 import { Routes, Route, Navigate, NavLink, Outlet, useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, MessageSquareText, Link2, Users, ListChecks, FileText, Settings, Plus, FolderKanban,
-  Sun, Moon, Monitor, LogOut, Check, Inbox, Globe, Play, Loader2, Download, Route as RouteIcon, ClipboardList, Lightbulb, ListTodo, Send, Menu, X, ShieldCheck, WandSparkles, Gauge, BotMessageSquare, Share2,
+  Sun, Moon, Monitor, LogOut, Check, Inbox, Globe, Play, Loader2, Download, Route as RouteIcon, ClipboardList, Lightbulb, ListTodo, Send, Menu, X, ShieldCheck, Building2, Gauge, BotMessageSquare, Share2,
 } from 'lucide-react';
 import { api, authHeaders, useApi, setTheme, useDark, useFilters, fmtDate, PREVIEW, signOut, useIdleSignOut, hasSavedSession, nextPath } from './lib.js';
 import { Spinner, SimBadge, Badge, ErrorBox, useToast, Segmented, EngineLogo, engineName } from './ui.jsx';
@@ -225,7 +225,7 @@ function Shell({ user }) {
       { to: `/p/${pid}/outreach`, label: 'Outreach', icon: Send },
       { to: `/p/${pid}/work`, label: 'Work log', icon: ListTodo },
       { to: `/p/${pid}/readiness`, label: 'AI readiness', icon: ShieldCheck },
-      { to: `/p/${pid}/optimise`, label: 'Brand & website', icon: WandSparkles },
+      { to: `/p/${pid}/optimise`, label: 'Brand & website', icon: Building2 },
     ] },
     { group: 'Deliver', items: [
       { to: `/p/${pid}/reports`, label: 'Reports', icon: FileText },

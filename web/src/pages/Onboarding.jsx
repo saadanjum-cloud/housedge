@@ -2,7 +2,7 @@
 // competitors, questions, goals and contacts, files, and the schedule.
 // Uses the same requests as the rest of the app (/projects, /orgs, /me), so security rules apply as everywhere else.
 import { useMemo, useRef, useState } from 'react';
-import { Check, Plus, Trash2, Upload, FileText, Sparkles, Loader2 } from 'lucide-react';
+import { Check, Plus, Trash2, Upload, FileText, Globe, Loader2 } from 'lucide-react';
 import { api, signOut } from '../lib.js';
 import { supabase } from '../supabase.js';
 import { useMeta, useUser } from '../ctx.js';
@@ -200,7 +200,7 @@ export default function Onboarding() {
               <Field label="Your job title" value={f.jobTitle} onChange={v => up({ jobTitle: v })} placeholder="e.g. Head of Marketing" maxLength={120} />
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl bg-accentSoft px-4 py-3">
-              <Sparkles size={16} className="text-accent" />
+              <Globe size={16} className="text-accent" />
               <span className="flex-1 text-[13px] text-ink2">Save time: we can read your website and fill in the next steps for you to check.</span>
               <button className="btn-primary btn-sm" disabled={!f.website.trim() || pre?.busy} onClick={prefill}>
                 {pre?.busy ? <><Loader2 size={13} className="animate-spin" />Reading your website…</> : 'Fill in from our website'}

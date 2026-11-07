@@ -1,10 +1,10 @@
 // Optimise: brand profile → ready-to-paste website code → AI-written drafts. The client publishes; we never do.
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Copy, Check, Trash2, WandSparkles, Code, FileText, AlertTriangle } from 'lucide-react';
+import { Copy, Check, Trash2, Code, FileText, AlertTriangle } from 'lucide-react';
 import { useApi, api, fmtDate } from '../lib.js';
 import { useProject } from '../ctx.js';
-import { PageHeader, Card, Spinner, ErrorBox, Badge, useToast } from '../ui.jsx';
+import { PageHeader, Card, Spinner, ErrorBox, Badge, useToast, EngineLogo } from '../ui.jsx';
 
 const LONG = ['description', 'audience', 'products', 'pricing', 'trust'];
 
@@ -131,7 +131,7 @@ function Drafts({ project, data, reload, readOnly }) {
   const remove = async d => { if (!confirm(`Delete the draft "${d.title}"?`)) return; await api(`/drafts/${d.id}`, { method: 'DELETE' }); reload(); };
   const Btn = ({ kind, label, extra, disabled }) => (
     <button className={`btn-primary btn-sm ${busy === kind ? 'shimmer' : ''}`} onClick={() => write(kind, extra)} disabled={!ready || !!busy || disabled}>
-      <WandSparkles size={13} />{busy === kind ? 'Writing…' : label}
+      <EngineLogo id="claude" size={11} />{busy === kind ? 'Writing…' : label}
     </button>
   );
   return (

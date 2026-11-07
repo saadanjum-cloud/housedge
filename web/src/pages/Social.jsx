@@ -2,7 +2,7 @@
 // 3 Make the posts that fill the gap (the draft appears right under its idea). 4 Other drafts. At the bottom, for
 // the curious: which social posts the AI engines already cite. Housedge never posts anything.
 import { useEffect, useState } from 'react';
-import { ExternalLink, WandSparkles, Copy, Trash2, FileText, Radar, ChevronDown } from 'lucide-react';
+import { ExternalLink, Copy, Trash2, FileText, Radar, ChevronDown } from 'lucide-react';
 import { useApi, useFilters, api, apiStream, safeHref, fmtDate } from '../lib.js';
 import { Logo } from '../motion.jsx';
 import { useProject } from '../ctx.js';
@@ -232,7 +232,7 @@ function Ideas({ project, ideas, drafts, readOnly, reload }) {
                   <p className="mt-1 text-[13.5px] text-ink2">{i.angle}</p>
                   <p className="mt-1.5 text-[12.5px] text-muted"><b className="text-ink2">Why:</b> {i.why}</p>
                 </div>
-                {!readOnly && !draft && <button className={`btn-primary btn-sm ${busy === n ? 'shimmer' : ''}`} disabled={busy >= 0} onClick={() => write(i, n)}><WandSparkles size={13} />{busy === n ? 'Writing…' : 'Write it for me'}</button>}
+                {!readOnly && !draft && <button className={`btn-primary btn-sm ${busy === n ? 'shimmer' : ''}`} disabled={busy >= 0} onClick={() => write(i, n)}><EngineLogo id="claude" size={11} />{busy === n ? 'Writing…' : 'Write it for me'}</button>}
               </div>
               {draft && <ul className="mt-3"><Draft d={draft} readOnly={readOnly} reload={reload} /></ul>}
             </li>
@@ -357,7 +357,7 @@ function CitedIdeas({ project, ideas, readOnly, reload }) {
               <div className="mt-1 text-sm font-medium">{i.question}</div>
               <p className="text-[13px] text-ink2">{i.answers} of {i.ofAnswers} answers cite {i.label}{i.top ? <> and name <b>{i.top.name}</b> in {i.top.rate}% of them, you in {i.ownRate}%</> : <>, you are named in {i.ownRate}%</>}.</p>
             </div>
-            {!readOnly && <button className={`btn-primary btn-sm ${busy === k ? 'shimmer' : ''}`} disabled={!!busy} onClick={() => write(i)}><WandSparkles size={13} />{busy === k ? 'Writing…' : 'Write it for me'}</button>}
+            {!readOnly && <button className={`btn-primary btn-sm ${busy === k ? 'shimmer' : ''}`} disabled={!!busy} onClick={() => write(i)}><EngineLogo id="claude" size={11} />{busy === k ? 'Writing…' : 'Write it for me'}</button>}
           </li>); })}
       </ul>
     </>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Sparkles, ArrowUp, ArrowDown, ArrowUpRight, ArrowDownRight, AlertTriangle, ArrowRight, Lightbulb } from 'lucide-react';
+import { Plus, ArrowUp, ArrowDown, ArrowUpRight, ArrowDownRight, AlertTriangle, ArrowRight, Lightbulb } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, Tooltip } from 'recharts';
 import { useApi, useFilters, useColors, api, fmtPct, fmtPos, fmtDate, COUNTRY_FLAGS, namesBrand } from '../lib.js';
 import { useMeta, useProject } from '../ctx.js';
@@ -239,7 +239,7 @@ function Suggestions({ list, projectId, onAdded, readOnly }) {
   const add = async name => { await api(`/projects/${projectId}/brands`, { method: 'POST', body: { name } }); toast(`${name} is now tracked. History was recounted.`); onAdded(); };
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface px-4 py-3 text-sm">
-      <Sparkles size={15} className="text-accent" />
+      <Lightbulb size={15} className="text-accent" />
       <span className="text-ink2">Often mentioned but not tracked:</span>
       {list.map(s => readOnly ? <span key={s.name} className="chip">{s.name} <span className="text-muted">{s.visibility}%</span></span> : (
         <button key={s.name} className="chip hover:border-accent" onClick={() => add(s.name)} title="Track this brand">
