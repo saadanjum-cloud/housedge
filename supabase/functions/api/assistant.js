@@ -42,7 +42,7 @@ export const PAGES = {
   outreach: ['Outreach', 'websites to get listed on, their status, and email drafts'],
   work: ['Work log', 'log changes made (listings, press, website fixes) and see their measured effect'],
   readiness: ['AI readiness', 'check the website for AI search bots, and the fact check (facts AI gets wrong)'],
-  optimise: ['Optimise', 'brand profile, ready-to-paste website code (structured data, llms.txt, robots.txt) and AI draft pages'],
+  optimise: ['Brand & website', 'brand profile, ready-to-paste website code (structured data, llms.txt, robots.txt) and AI draft pages'],
   reports: ['Reports', 'printable reports'],
   settings: ['Project settings', 'schedule (how often checks run), AI assistants and countries'],
   account: ['Your account', 'name, password, and connecting Housedge to Claude, ChatGPT or Claude Code'],
@@ -86,7 +86,7 @@ export async function runTool(projectId, name, input = {}) {
     const brand = input.brand ? (await M.brandsOf(projectId)).find(b => b.name.toLowerCase() === String(input.brand).toLowerCase()) : null;
     const rows = (await M.chats(projectId, f, { limit: Math.min(8, input.limit || 5), q: input.text ? String(input.text).slice(0, 100) : undefined, brandId: brand?.id })).rows;
     return rows.map(r => ({ answerId: r.id, date: r.day, engine: ENGINES[r.engine]?.label || r.engine, question: r.prompt, country: r.country,
-      brandsNamed: r.mentions.map(m => `${m.name} #${m.position}`), confusedWith: r.confusedWith, citedSites: [...new Set(r.citations.map(c => c.domain))].slice(0, 8),
+      brandsNamed: r.mentions.map(m => (m.position ? `${m.name} #${m.position}` : `${m.name} (named, not in a ranked list)`)), confusedWith: r.confusedWith, citedSites: [...new Set(r.citations.map(c => c.domain))].slice(0, 8),
       answer: untrusted(clip(r.text, 1500)) }));
   }
   if (name === 'get_actions') return (await computeActions(projectId, f)).slice(0, 10).map(a => ({ key: a.key, title: a.title, priority: a.priority, status: a.status, why: a.why, steps: a.steps }));

@@ -110,7 +110,9 @@ export function resolve(entities, brands) {
   return entities.map(e => {
     const key = normName(e.name);
     const byDomain = e.website && table.find(b => b.domain && (e.website === b.domain || e.website.endsWith('.' + b.domain)));
-    const byName = table.find(b => b.keys.has(key));
+    // A product line counts as the brand: "Oura Ring 5" is Oura, "Samsung Galaxy Ring" is Samsung (Nov 2026: ChatGPT
+    // names the model, not the company, and those mentions were lost).
+    const byName = table.find(b => b.keys.has(key)) || table.find(b => [...b.keys].some(k => key.startsWith(k + ' ')));
     return { ...e, brand_id: (byDomain || byName)?.id ?? null };
   });
 }

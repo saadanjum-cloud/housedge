@@ -11,8 +11,11 @@ import { EASE } from './motion.jsx';
 const TINTS = ['#0a84ff', '#bf5af2', '#30d158', '#ff9f0a', '#ff375f', '#64d2ff', '#5e5ce6', '#ffd60a'];
 const tint = name => TINTS[[...String(name)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % TINTS.length];
 
-export function ProjectAvatar({ name, size = 28 }) {
+// The brand's own logo when its website gave one (profile logo address), else a tinted initial.
+export function ProjectAvatar({ name, logo, size = 28 }) {
   const c = tint(name);
+  const [broken, setBroken] = useState(false);
+  if (logo && !broken) return <img src={logo} alt="" width={size} height={size} onError={() => setBroken(true)} className="shrink-0 rounded-[9px] bg-white object-contain ring-1 ring-black/10" style={{ width: size, height: size }} aria-hidden />;
   return (
     <span className="grid shrink-0 place-items-center rounded-[9px] font-semibold text-white"
       style={{ width: size, height: size, fontSize: size * 0.46, background: `linear-gradient(140deg, ${c}, ${c}cc)`, boxShadow: `inset 0 0 0 1px rgba(255,255,255,.18)` }} aria-hidden>
@@ -83,7 +86,7 @@ export default function ProjectSwitcher({ projects, currentId, team }) {
       <div className="label">{team ? 'Client' : 'Project'}</div>
       <button ref={btn} type="button" onClick={() => setOpen(o => !o)} aria-haspopup="listbox" aria-expanded={open}
         className="flex w-full items-center gap-2.5 rounded-xl border border-line bg-surface px-2.5 py-2 text-left shadow-thumb transition-colors hover:bg-raised focus:outline-none focus-visible:ring-4 focus-visible:ring-accentSoft">
-        {current ? <ProjectAvatar name={current.name} /> : <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[9px] bg-fill text-ink2"><FolderKanban size={15} /></span>}
+        {current ? <ProjectAvatar name={current.name} logo={current.logo} /> : <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[9px] bg-fill text-ink2"><FolderKanban size={15} /></span>}
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-semibold">{current ? current.name : team ? 'All clients' : 'Your projects'}</span>
           <span className="block truncate text-[11px] text-muted">{!team ? (current ? 'Your brand' : `${projects?.length ?? 0} projects`) : current ? meta.categories[current.category] || 'Client' : `${projects?.length ?? 0} clients`}</span>
@@ -114,7 +117,7 @@ export default function ProjectSwitcher({ projects, currentId, team }) {
                     {it.kind === 'all' && <><span className="grid h-7 w-7 place-items-center rounded-[9px] bg-fill text-ink2"><FolderKanban size={14} /></span><span className="flex-1 font-medium">All clients</span></>}
                     {it.kind === 'new' && <><span className="grid h-7 w-7 place-items-center rounded-[9px] bg-accentSoft"><Plus size={15} /></span><span className="flex-1 font-medium">New client</span></>}
                     {it.kind === 'project' && <>
-                      <ProjectAvatar name={it.p.name} />
+                      <ProjectAvatar name={it.p.name} logo={it.p.logo} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium">{it.p.name}</span>
                         {team && <span className="block truncate text-[11px] text-muted">{meta.categories[it.p.category] || 'Client'} · {it.p.data_mode === 'live' ? 'Live data' : 'Simulated'}</span>}

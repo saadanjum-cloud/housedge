@@ -1,303 +1,360 @@
-// Social: the social and community posts AI engines cite, who they name, and posts worth writing. Built from the
-// citations of real answers; Claude drafts posts for the client's own accounts. Housedge never posts anything.
-import { useState } from 'react';
-import { ExternalLink, WandSparkles, Copy, Trash2, FileText, AlertTriangle, Radar } from 'lucide-react';
-import { useApi, useFilters, api, safeHref, fmtDate } from '../lib.js';
+// Social: a guided flow. 1 Scan the platforms. 2 See what people say and where competitors are named without you.
+// 3 Make the posts that fill the gap (the draft appears right under its idea). 4 Other drafts. At the bottom, for
+// the curious: which social posts the AI engines already cite. Housedge never posts anything.
+import { useEffect, useState } from 'react';
+import { ExternalLink, WandSparkles, Copy, Trash2, FileText, Radar, ChevronDown } from 'lucide-react';
+import { useApi, useFilters, api, apiStream, safeHref, fmtDate } from '../lib.js';
+import { Logo } from '../motion.jsx';
 import { useProject } from '../ctx.js';
-import { Card, PageHeader, Spinner, ErrorBox, Badge, SimBanner, Segmented, Stat, Empty, EngineLogo, PlatformLogo, useToast } from '../ui.jsx';
+import { Card, PageHeader, Spinner, ErrorBox, Badge, SimBanner, Segmented, Empty, EngineLogo, PlatformLogo, useToast } from '../ui.jsx';
 import FilterBar from './FilterBar.jsx';
 
+const SCAN_PLATFORMS = ['reddit', 'linkedin', 'youtube', 'quora'];
+const SCAN_LABEL = { reddit: 'Reddit', linkedin: 'LinkedIn', youtube: 'YouTube', quora: 'Quora' };
+const SENT = { positive: 'good', mixed: 'warn', negative: 'bad', neutral: 'default' };
 const OWNER = { own: ['Yours', 'accent'], competitor: ['Competitor', 'bad'], third: ['Third party', 'default'] };
+const same = (a, b) => String(a || '').toLowerCase().replace(/[^a-z0-9]/g, '') === String(b || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const draftOf = (drafts, i) => drafts.find(x => x.platform === i.platform && x.question === i.topic);
+
+const Step = ({ n, title, subtitle, right, children }) => (
+  <section className="card p-5 md:p-6">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex items-start gap-3">
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-[13px] font-bold text-white">{n}</span>
+        <div><h2 className="text-[17px] font-semibold leading-7">{title}</h2>{subtitle && <p className="mt-0.5 max-w-3xl text-[13.5px] text-muted">{subtitle}</p>}</div>
+      </div>
+      {right}
+    </div>
+    <div className="mt-4">{children}</div>
+  </section>
+);
 
 export default function Social() {
   const { project, readOnly } = useProject();
   const { qs } = useFilters();
   const s = useApi(`/projects/${project.id}/social?${qs}`);
-  const [owner, setOwner] = useState('');
   const toast = useToast();
-  const [scanning, setScanning] = useState(false);
+  const own = project.brands.find(b => b.is_own)?.name || project.name;
+  const [scanning, setScanning] = useState(null); // null, or { steps: { reddit: 'searching' | n | 'failed' }, reading }
   const [scanErr, setScanErr] = useState(null);
   const scan = async () => {
-    setScanning(true); setScanErr(null);
-    try { await api(`/projects/${project.id}/social/scan`, { method: 'POST' }); toast('Scan finished'); s.reload(); }
-    catch (e) { setScanErr(e); }
-    setScanning(false);
+    setScanning({ steps: Object.fromEntries(SCAN_PLATFORMS.map(p => [p, 'searching'])), reading: false }); setScanErr(null);
+    try {
+      await apiStream(`/projects/${project.id}/social/scan`, {}, e => {
+        if (e.t === 'platform') setScanning(x => x && ({ ...x, steps: { ...x.steps, [e.platform]: e.failed ? 'failed' : e.posts } }));
+        if (e.t === 'reading') setScanning(x => x && ({ ...x, reading: true }));
+      });
+      toast('Scan finished'); s.reload();
+    } catch (e) { setScanErr(e); }
+    setScanning(null);
   };
   if (s.error) return <ErrorBox error={s.error} />;
   const d = s.data;
-  const ownPosts = d?.posts.filter(p => p.owner === 'own').length || 0;
+  const scanBtn = !readOnly && !scanning && <button className="btn-primary" onClick={scan}><Radar size={15} />{d?.scan ? 'Scan again' : 'Scan now'}</button>;
+  const otherDrafts = d ? d.drafts.filter(x => !(d.scan?.ideas || []).some(i => draftOf([x], i))) : [];
   return (
     <>
-      <PageHeader title="Social" subtitle="What people say about your market on Reddit, LinkedIn, YouTube and Quora, the posts you should make, and which social posts AI engines already cite."
-        right={!readOnly && <button className={`btn-primary ${scanning ? 'shimmer' : ''}`} onClick={scan} disabled={scanning}><Radar size={15} />{scanning ? 'Scanning… about a minute' : d?.scan ? 'Scan again' : 'Scan social'}</button>} />
+      <PageHeader title="Social" subtitle={`Find the conversations about your market on Reddit, LinkedIn, YouTube and Quora, see where competitors get recommended and ${own} does not, and publish posts that fill the gap.`} />
       <ErrorBox error={scanErr} />
-      <div className="mb-4"><SimBanner show={project.data_mode !== 'live'}>The posts below are made up for the demo.</SimBanner></div>
-      {!d ? <Spinner /> : <>
-        {d.scan ? <Scan scan={d.scan} project={project} readOnly={readOnly} reload={s.reload} />
-          : <Card className="mb-4" title="Scan the social platforms" subtitle="Searches Reddit, LinkedIn, YouTube and Quora for what people ask and say about your market, your brand and your competitors, then suggests the posts you should make. Separate from the AI check: this reads the platforms, the check reads the AI engines.">
-              {readOnly ? <p className="text-sm text-muted">The client runs the scan.</p> : <button className={`btn-primary ${scanning ? 'shimmer' : ''}`} onClick={scan} disabled={scanning}><Radar size={15} />{scanning ? 'Scanning… about a minute' : 'Scan social'}</button>}
-            </Card>}
-        <Drafts drafts={d.drafts} readOnly={readOnly} reload={s.reload} />
-        <h2 className="mt-8 mb-1 text-lg font-semibold">What AI engines cite</h2>
-        <p className="mb-3 text-sm text-muted">From the answers of your AI checks: which social posts the engines cite and who they name.</p>
-        <FilterBar />
-        {!d.socialAnswers ? <Empty title="No social posts cited yet">None of the answers in this period cite a social or community site. Try a longer period.</Empty> : <>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Stat i={0} label="Answers citing social" value={`${Math.round((100 * d.socialAnswers) / Math.max(1, d.totalAnswers))}%`} sub={`${d.socialAnswers} of ${d.totalAnswers} answers`} />
-          <Stat i={1} label="Most-cited platform" value={d.platforms[0]?.label || '—'} sub={d.platforms[0] && `in ${d.platforms[0].share}% of answers`} />
-          <Stat i={2} label="Your own posts cited" value={ownPosts} help="Posts on your official profiles (Optimise > Brand profile) or accounts with your brand's name." />
+      <SimBanner show={project.data_mode !== 'live'}>The posts below are made up for the demo.</SimBanner>
+      {!d ? <Spinner /> : (
+        <div className="grid gap-4">
+          {scanning ? <ScanProgress own={own} competitors={project.brands.filter(b => !b.is_own).length} state={scanning} /> : (
+            <Step n={1} title="Scan the platforms" right={scanBtn}
+              subtitle={`${d.scan ? `Last scan ${fmtDate(d.scan.at)}. ` : ''}Google Search looks through each platform for posts about your market, ${own} and your competitors, and Claude reads what it finds. About a minute. Nothing is posted anywhere.`}>
+              {d.scan ? <ScanSummary scan={d.scan} own={own} /> : readOnly ? <p className="text-sm text-muted">The client runs the scan.</p> : <p className="text-sm text-ink2">No scan yet. Press <b>Scan now</b> to start.</p>}
+            </Step>
+          )}
+
+          {d.scan && <Step n={2} title="What people say, and where you are missing" subtitle="One tab per platform: what people keep asking, the posts found, who each post names, and how it talks about you.">
+            <Platforms scan={d.scan} own={own} />
+          </Step>}
+
+          {d.scan && <Step n={3} title="Make these posts" subtitle="Where people ask something your competitors get recommended for, or misunderstand you. Most valuable first. Press “Write it for me” and the draft appears right here, written for your own account from your brand profile and confirmed facts only.">
+            <Ideas project={project} ideas={d.scan.ideas} drafts={d.drafts} readOnly={readOnly} reload={s.reload} />
+          </Step>}
+
+          {otherDrafts.length > 0 && <Step n={d.scan ? 4 : 2} title="Other drafts" subtitle="Drafts from earlier scans and from the questions below.">
+            <ul className="grid gap-3">{otherDrafts.map(x => <Draft key={x.id} d={x} readOnly={readOnly} reload={s.reload} />)}</ul>
+          </Step>}
+
+          <Cited d={d} project={project} readOnly={readOnly} reload={s.reload} />
         </div>
-
-        <Card className="mt-4" pad={false} title="Platforms AI cites" subtitle="Share of each engine's answers that cite the platform, and who those answers name.">
-          <div className="overflow-x-auto px-2 pb-2">
-            <table className="w-full">
-              <thead><tr>
-                <th className="th">Platform</th><th className="th">All</th>
-                {d.engines.map(e => <th key={e} className="th"><EngineLogo id={e} /></th>)}
-                <th className="th">You named</th><th className="th">Top competitor</th>
-              </tr></thead>
-              <tbody>
-                {d.platforms.map(p => {
-                  const you = p.brands.find(b => b.own), top = p.brands.find(b => !b.own);
-                  return (
-                    <tr key={p.platform}>
-                      <td className="td font-medium"><PlatformLogo id={p.platform} label /></td>
-                      <td className="td tnum">{p.share}%</td>
-                      {d.engines.map(e => <td key={e} className={`td tnum ${p.byEngine[e] ? '' : 'text-muted'}`}>{p.byEngine[e]}%</td>)}
-                      <td className={`td tnum ${top && you && you.rate < top.rate ? 'font-medium text-bad' : ''}`}>{you ? `${you.rate}%` : '—'}</td>
-                      <td className="td text-sm">{top?.rate ? <>{top.name} <span className="tnum text-muted">{top.rate}%</span></> : '—'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-
-        <Ideas project={project} ideas={d.ideas} readOnly={readOnly} reload={s.reload} />
-
-        <Card className="mt-4" pad={false} title="Most-cited social posts" subtitle="Individual posts and pages, most cited first. Yours, a tracked competitor's, or a third party's."
-          right={<Segmented size="sm" value={owner} onChange={setOwner} options={[{ value: '', label: 'All' }, { value: 'own', label: 'Yours' }, { value: 'competitor', label: 'Competitors' }, { value: 'third', label: 'Others' }]} />}>
-          <ul className="max-h-[600px] overflow-auto px-2 pb-2">
-            {d.posts.filter(p => !owner || p.owner === owner).map(p => <Post key={p.url} p={p} />)}
-          </ul>
-        </Card>
-        <p className="mt-4 text-xs text-muted">Housedge asks the engines through their APIs, which can cite differently from the ChatGPT, Gemini and Perplexity apps. AI also reads many social posts it never cites, so these numbers show the visible part.</p>
-        </>}
-      </>}
+      )}
     </>
   );
 }
 
-const SENT = { positive: 'good', mixed: 'warn', negative: 'bad', neutral: 'default' };
+// ---------------------------------------------------------------- step 1
+function ScanSummary({ scan, own }) {
+  const rows = scan.searched || scan.platforms.map(p => ({ platform: p.platform, label: p.label, posts: p.posts.length }));
+  return (
+    <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      {rows.map(r => {
+        const p = scan.platforms.find(x => x.platform === r.platform);
+        const named = p ? p.posts.filter(x => x.brands.some(b => same(b, own))).length : 0;
+        const missing = p ? p.posts.filter(x => x.brands.length && !x.brands.some(b => same(b, own))).length : 0;
+        return (
+          <li key={r.platform} className="flex items-center gap-3 rounded-xl border border-line px-3 py-2.5">
+            <PlatformLogo id={r.platform} size={18} />
+            <div className="min-w-0 text-[13px]">
+              <div className="font-semibold">{r.label}</div>
+              <div className="text-muted">{r.failed ? 'search failed, try again' : !r.posts ? 'nothing relevant found' : <>{r.posts} posts · you in {named}{missing > 0 && <span className="text-bad"> · {missing} without you</span>}</>}</div>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
-function Scan({ scan, project, readOnly, reload }) {
+function ScanProgress({ own, competitors, state }) {
+  const [secs, setSecs] = useState(0);
+  useEffect(() => { const t = setInterval(() => setSecs(x => x + 1), 1000); return () => clearInterval(t); }, []);
+  const done = SCAN_PLATFORMS.filter(p => state.steps[p] !== 'searching').length;
+  const finished = done + (state.reading ? 0.5 : 0), total = SCAN_PLATFORMS.length + 1;
+  const Row = ({ status, logo, children }) => (
+    <li className="flex items-center gap-3 rounded-xl px-3 py-2.5" style={{ background: status === 'done' ? 'var(--fill)' : 'transparent' }}>
+      <span className="grid h-5 w-5 shrink-0 place-items-center">
+        {status === 'done' ? <span className="grid h-5 w-5 place-items-center rounded-full bg-accent text-[11px] font-bold text-white">✓</span>
+          : status === 'failed' ? <span className="font-bold text-bad">×</span>
+            : status === 'waiting' ? <span className="h-2 w-2 rounded-full bg-line" /> : <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent border-t-transparent" />}
+      </span>
+      {logo}<span className="min-w-0 text-[14px]">{children}</span>
+    </li>
+  );
+  return (
+    <div className="card rise p-6 md:p-8">
+      <div className="flex items-start gap-4">
+        <span className="shrink-0 animate-pulse"><Logo size={44} /></span>
+        <div className="min-w-0">
+          <h2 className="text-[20px] font-bold tracking-display md:text-[22px]">Reading what people say about {own} on social media</h2>
+          <p className="mt-1 max-w-3xl text-[14px] text-muted">Google Search is looking through Reddit, LinkedIn, YouTube and Quora for posts about {own}'s market, {own} itself and its {competitors || ''} competitors. Claude then reads what was found, sums up each platform, and suggests the posts you should make. About a minute. Stay on this page.</p>
+        </div>
+      </div>
+      <div className="mt-6 flex items-center gap-3">
+        <div className="h-2 flex-1 overflow-hidden rounded-full bg-fill"><div className="h-full rounded-full bg-accent transition-all duration-700" style={{ width: `${Math.max(4, (100 * finished) / total)}%` }} /></div>
+        <span className="text-[13px] font-semibold tnum">{done} of {SCAN_PLATFORMS.length} platforms</span>
+        <span className="text-[13px] text-muted tnum">{Math.floor(secs / 60)}:{String(secs % 60).padStart(2, '0')}</span>
+      </div>
+      <ul className="mt-6 grid gap-1.5">
+        {SCAN_PLATFORMS.map(p => { const st = state.steps[p]; return (
+          <Row key={p} status={st === 'searching' ? 'working' : st === 'failed' ? 'failed' : 'done'} logo={<PlatformLogo id={p} size={14} />}>
+            <span className="font-medium">{SCAN_LABEL[p]}</span><span className="ml-2 text-muted">{st === 'searching' ? 'searching…' : st === 'failed' ? 'the search failed' : st === 0 ? 'nothing relevant found' : `${st} posts found`}</span>
+          </Row>); })}
+        <Row status={state.reading ? 'working' : 'waiting'} logo={<EngineLogo id="claude" size={14} />}>
+          <span className="font-medium">Claude</span><span className="ml-2 text-muted">{state.reading ? 'reading the posts and writing the post ideas…' : 'waits for the searches'}</span>
+        </Row>
+      </ul>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- step 2
+function Platforms({ scan, own }) {
+  const [open, setOpen] = useState(scan.platforms[0]?.platform || '');
+  const [missing, setMissing] = useState(false);
+  const cur = scan.platforms.find(p => p.platform === open);
+  if (!cur) return <p className="text-sm text-muted">No posts were found on any platform. Add more questions or competitors and scan again.</p>;
+  const lacking = cur.posts.filter(x => x.brands.length && !x.brands.some(b => same(b, own)));
+  const named = cur.posts.filter(x => x.brands.some(b => same(b, own))).length;
+  const shown = missing ? lacking : cur.posts;
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Segmented value={open} onChange={v => { setOpen(v); setMissing(false); }} options={scan.platforms.map(p => ({ value: p.platform, label: `${p.label} (${p.posts.length})` }))} />
+        <span className="text-[13px] text-ink2">{own} is named in <b>{named}</b> of {cur.posts.length} posts{lacking.length > 0 && <>, and <b className="text-bad">{lacking.length}</b> name only competitors</>}.</span>
+      </div>
+      <div className="mt-4 grid gap-5 lg:grid-cols-5">
+        <div className="lg:col-span-2">
+          <div className="label">In short</div>
+          <p className="mt-1 text-[14px] text-ink2">{cur.summary}</p>
+          {cur.themes.length > 0 && <>
+            <div className="label mt-4">What people keep asking</div>
+            <ul className="mt-1 grid gap-1 text-[13.5px]">{cur.themes.map(t => <li key={t} className="rounded-lg bg-fill px-3 py-1.5">{t}</li>)}</ul>
+          </>}
+        </div>
+        <div className="lg:col-span-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="label">Posts found</div>
+            {lacking.length > 0 && <label className="flex items-center gap-1.5 text-xs text-muted"><input type="checkbox" checked={missing} onChange={e => setMissing(e.target.checked)} />Only posts without {own} ({lacking.length})</label>}
+          </div>
+          <ul className="mt-1">
+            {shown.map(p => (
+              <li key={p.url} className="flex items-start justify-between gap-3 border-t border-line py-2.5 text-sm first:border-t-0">
+                <div className="min-w-0">
+                  <a href={safeHref(p.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 font-medium hover:underline"><span className="truncate">{p.title || p.url}</span><ExternalLink size={11} className="shrink-0 text-muted" /></a>
+                  {p.what && <p className="mt-0.5 text-[13px] text-ink2">{p.what}</p>}
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                    {(p.author || p.community || p.handle) && <span>{p.author || p.community || `@${p.handle}`}</span>}
+                    {p.brands.map(b => <Badge key={b} tone={same(b, own) ? 'accent' : 'bad'}>{b}</Badge>)}
+                    {p.brands.length > 0 && !p.brands.some(b => same(b, own)) && <span className="text-bad">you are missing</span>}
+                  </div>
+                </div>
+                {p.sentiment && p.sentiment !== 'neutral' && <Badge tone={SENT[p.sentiment]}>{p.sentiment === 'mixed' ? 'mixed on you' : `${p.sentiment} on you`}</Badge>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- step 3
+function Ideas({ project, ideas, drafts, readOnly, reload }) {
   const toast = useToast();
   const [busy, setBusy] = useState(-1);
   const [err, setErr] = useState(null);
-  const [open, setOpen] = useState(scan.platforms[0]?.platform || '');
   const write = async (i, n) => {
     setBusy(n); setErr(null);
-    try { await api(`/projects/${project.id}/social/posts`, { method: 'POST', body: { platform: i.platform, topic: i.topic, angle: `${i.title}. ${i.angle}` } }); toast('Post written'); reload(); }
+    try { await api(`/projects/${project.id}/social/posts`, { method: 'POST', body: { platform: i.platform, topic: i.topic, angle: `${i.title}. ${i.angle}` } }); toast('Draft written'); reload(); }
     catch (e) { setErr(e); }
     setBusy(-1);
   };
-  const [missing, setMissing] = useState(false);
-  const cur = scan.platforms.find(p => p.platform === open);
-  const own = scan.brands[0];
-  const isOwn = b => String(b).toLowerCase().replace(/[^a-z0-9]/g, '') === String(own).toLowerCase().replace(/[^a-z0-9]/g, '');
-  const lacking = p => p.posts.filter(x => x.brands.length && !x.brands.some(isOwn)); // posts that name a brand, but not you
+  if (!ideas.length) return <p className="text-sm text-muted">The scan found no gap worth a post yet.</p>;
   return (
     <>
-      <Card className="mb-4" pad={false} title="Where you are missing" subtitle={`Posts found by the scan of ${fmtDate(scan.at)} that name a brand. Where competitors are named and ${own} is not, there is a conversation to join.`}>
-        <div className="overflow-x-auto px-2 pb-2">
-          <table className="w-full">
-            <thead><tr><th className="th">Platform</th><th className="th">Posts found</th><th className="th">Name you</th><th className="th">Name competitors only</th><th className="th">Most named competitor</th></tr></thead>
-            <tbody>
-              {scan.platforms.map(p => {
-                const you = p.posts.filter(x => x.brands.some(isOwn)).length, lack = lacking(p);
-                const count = new Map();
-                for (const x of lack) for (const b of x.brands) count.set(b, (count.get(b) || 0) + 1);
-                const top = [...count].sort((a, b) => b[1] - a[1])[0];
-                return (
-                  <tr key={p.platform} className="cursor-pointer hover:bg-fill" onClick={() => { setOpen(p.platform); setMissing(lack.length > 0); }}>
-                    <td className="td font-medium"><PlatformLogo id={p.platform} label /></td>
-                    <td className="td tnum">{p.posts.length}</td>
-                    <td className="td tnum">{you}</td>
-                    <td className={`td tnum ${lack.length > you ? 'font-medium text-bad' : ''}`}>{lack.length}</td>
-                    <td className="td text-sm">{top ? <>{top[0]} <span className="tnum text-muted">{top[1]}×</span></> : '—'}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-      <Card className="mb-4" title="Posts you should make" subtitle={`From the scan of ${fmtDate(scan.at)}: where people ask things your competitors get recommended for, or misunderstand you.`}>
-        <ErrorBox error={err} />
-        {!scan.ideas.length ? <p className="text-sm text-muted">The scan found nothing worth posting about yet.</p> : (
-          <ol className="grid gap-3">
-            {scan.ideas.map((i, n) => (
-              <li key={n} className="rounded-xl border border-line p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2"><PlatformLogo id={i.platform} size={14} label /><span className="text-xs text-muted">#{n + 1}</span></div>
-                    <div className="mt-1.5 font-medium">{i.title}</div>
-                    <p className="mt-1 text-[13px] text-ink2">{i.angle}</p>
-                    <p className="mt-1 text-xs text-muted">Why: {i.why}</p>
-                  </div>
-                  {!readOnly && <button className={`btn-primary btn-sm ${busy === n ? 'shimmer' : ''}`} disabled={busy >= 0} onClick={() => write(i, n)}>
-                    <WandSparkles size={13} />{busy === n ? 'Writing…' : 'Write post'}
-                  </button>}
-                </div>
-              </li>
-            ))}
-          </ol>
-        )}
-      </Card>
-      <Card className="mb-4" pad={false} title="What people say" subtitle={scan.failed?.length ? `${scan.failed.join(', ')}: the search failed this time.` : 'Trends and posts found on each platform.'}
-        right={<Segmented size="sm" value={open} onChange={setOpen} options={scan.platforms.map(p => ({ value: p.platform, label: p.label }))} />}>
-        {cur && <div className="px-5 pb-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-4">
-            <PlatformLogo id={cur.platform} size={18} label />
-            <label className="flex items-center gap-1.5 text-xs text-muted"><input type="checkbox" checked={missing} onChange={e => setMissing(e.target.checked)} />Only posts where you are missing ({lacking(cur).length})</label>
-          </div>
-          <p className="mt-2 text-sm text-ink2">{cur.summary}</p>
-          {cur.themes.length > 0 && <ul className="mt-3 grid gap-1 text-sm sm:grid-cols-2">{cur.themes.map(t => <li key={t} className="rounded-lg bg-fill px-3 py-1.5">{t}</li>)}</ul>}
-          <ul className="mt-3">
-            {(missing ? lacking(cur) : cur.posts).map(p => (
-              <li key={p.url} className="flex items-start justify-between gap-3 border-t border-line py-2.5 text-sm">
-                <PlatformLogo id={cur.platform} size={14} />
+      <ErrorBox error={err} />
+      <ol className="grid gap-3">
+        {ideas.map((i, n) => {
+          const draft = draftOf(drafts, i);
+          return (
+            <li key={n} className={`rounded-xl border p-4 ${draft ? 'border-accent/40' : 'border-line'}`}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <a href={safeHref(p.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:underline"><span className="truncate">{p.title || p.url}</span><ExternalLink size={11} className="shrink-0 text-muted" /></a>
-                  {p.what && <p className="mt-0.5 text-[13px] text-ink2">{p.what}</p>}
-                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-                    <Badge>{p.kind}</Badge>{p.community && <span>{p.community}</span>}{p.handle && <span>@{p.handle}</span>}
-                    {p.brands.length > 0 && <span>· names {p.brands.map(b => <b key={b} className={isOwn(b) ? 'text-accent' : 'text-bad'}>{b}</b>).reduce((a, x) => (a === null ? [x] : [...a, ', ', x]), null)}</span>}
-                    {p.brands.length > 0 && !p.brands.some(isOwn) && <Badge tone="bad">you are missing</Badge>}
-                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted"><PlatformLogo id={i.platform} size={13} label /><span>· post {n + 1}</span>{draft && <Badge tone="good">Draft written</Badge>}</div>
+                  <div className="mt-1 font-medium">{i.title}</div>
+                  <p className="mt-1 text-[13.5px] text-ink2">{i.angle}</p>
+                  <p className="mt-1.5 text-[12.5px] text-muted"><b className="text-ink2">Why:</b> {i.why}</p>
                 </div>
-                {p.sentiment && <Badge tone={SENT[p.sentiment]}>{p.sentiment}</Badge>}
-              </li>
-            ))}
-          </ul>
-        </div>}
-      </Card>
+                {!readOnly && !draft && <button className={`btn-primary btn-sm ${busy === n ? 'shimmer' : ''}`} disabled={busy >= 0} onClick={() => write(i, n)}><WandSparkles size={13} />{busy === n ? 'Writing…' : 'Write it for me'}</button>}
+              </div>
+              {draft && <ul className="mt-3"><Draft d={draft} readOnly={readOnly} reload={reload} startOpen /></ul>}
+            </li>
+          );
+        })}
+      </ol>
     </>
   );
 }
 
-function Post({ p }) {
+// ---------------------------------------------------------------- a draft
+function Draft({ d, readOnly, reload, startOpen = false }) {
+  const toast = useToast();
+  const [open, setOpen] = useState(startOpen);
+  const copy = async () => { try { await navigator.clipboard.writeText(`${d.title}\n\n${d.body}`); toast('Copied'); } catch { toast('Copy failed'); } };
+  const remove = async () => { if (!confirm(`Delete the draft "${d.title}"?`)) return; await api(`/drafts/${d.id}`, { method: 'DELETE' }); reload(); };
   return (
-    <li className="flex items-center justify-between gap-3 border-t border-line px-3 py-2.5 text-sm">
-      <div className="min-w-0">
-        <a href={safeHref(p.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 truncate hover:underline">
-          <span className="truncate">{p.title || p.url}</span><ExternalLink size={11} className="shrink-0 text-muted" />
-        </a>
-        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-          <PlatformLogo id={p.platform} size={12} /><Badge>{p.label} {p.kind}</Badge><Badge tone={OWNER[p.owner][1]}>{OWNER[p.owner][0]}</Badge>
-          {p.community && <span>{p.community}</span>}{p.handle && <span>@{p.handle}</span>}
-          <span>{fmtDate(p.first)}{p.last !== p.first && ` – ${fmtDate(p.last)}`}</span>
-          {p.brands.length > 0 && <span>· names {p.brands.map(b => `${b.name} ${b.rate}%`).join(', ')}</span>}
-        </div>
+    <li className="rounded-xl border border-line bg-fill/40">
+      <div className="flex flex-wrap items-center justify-between gap-2 p-3">
+        <button className="flex min-w-0 items-center gap-2 text-left" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+          <FileText size={15} className="shrink-0 text-muted" /><span className="truncate text-sm font-medium">{d.title}</span>
+          <PlatformLogo id={d.platform} size={13} label /><Badge tone="warn">Draft</Badge>
+        </button>
+        <span className="flex items-center gap-2 text-xs text-muted">
+          {fmtDate(d.created_at)}
+          <button className="btn-ghost btn-sm" onClick={copy}><Copy size={13} />Copy</button>
+          {!readOnly && <button className="text-muted hover:text-ink" onClick={remove} aria-label="Delete draft"><Trash2 size={14} /></button>}
+        </span>
       </div>
-      <span className="flex shrink-0 items-center gap-1.5">
-        {p.engines.map(e => <EngineLogo key={e} id={e} size={13} />)}
-        <span className="tnum w-8 text-right text-xs text-ink2">{p.cited}×</span>
-      </span>
+      {open && (
+        <div className="grid gap-3 border-t border-line p-4 text-sm">
+          <p className="rounded-lg bg-warnBg px-3 py-2 text-xs text-warnInk">Before you publish: check every fact, fill the [ADD: …] placeholders, post as yourself and say who you work for, and follow the community's rules. Then log it in the Work log so Housedge measures whether AI starts citing it.</p>
+          {d.where && <div><span className="label">Where to post</span><p className="text-ink2">{d.where}</p></div>}
+          <pre tabIndex={0} className="max-h-[520px] overflow-auto whitespace-pre-wrap rounded-lg bg-surface p-3 font-sans leading-relaxed text-ink2">{d.body}</pre>
+          {d.keywords?.length > 0 && <div><span className="label">Search phrases it covers</span><div className="mt-1 flex flex-wrap gap-1.5">{d.keywords.map(k => <Badge key={k}>{k}</Badge>)}</div></div>}
+          {d.notes?.length > 0 && <div><span className="label">Before posting</span><ul className="mt-1 list-disc pl-5 text-[13px] text-ink2">{d.notes.map(n => <li key={n}>{n}</li>)}</ul></div>}
+        </div>
+      )}
     </li>
   );
 }
 
-function Ideas({ project, ideas, readOnly, reload }) {
+// ---------------------------------------------------------------- for the curious: what the AI engines cite from social
+function Cited({ d, project, readOnly, reload }) {
+  const [open, setOpen] = useState(false);
+  const [owner, setOwner] = useState('');
+  const ownName = project.brands.find(b => b.is_own)?.name;
+  return (
+    <section className="card p-5 md:p-6">
+      <button className="flex w-full items-center justify-between gap-3 text-left" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+        <div><h2 className="text-[17px] font-semibold">Which social posts the AI engines already cite</h2>
+          <p className="mt-0.5 text-[13.5px] text-muted">From your AI checks: {d.socialAnswers} of {d.totalAnswers} answers cite a social post. Open to see which platforms, which posts, and who those answers name.</p></div>
+        <ChevronDown size={18} className={`shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && <div className="mt-4 grid gap-4">
+        <FilterBar />
+        {!d.socialAnswers ? <Empty title="No social posts cited yet">None of the answers in this period cite a social or community site. Try a longer period.</Empty> : <>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead><tr><th className="th">Platform</th><th className="th">Answers citing it</th>{d.engines.map(e => <th key={e} className="th"><EngineLogo id={e} /></th>)}<th className="th">{ownName} named</th><th className="th">Competitor named most</th></tr></thead>
+              <tbody>{d.platforms.map(p => { const you = p.brands.find(b => b.own), top = p.brands.find(b => !b.own); return (
+                <tr key={p.platform}>
+                  <td className="td font-medium"><PlatformLogo id={p.platform} label /></td>
+                  <td className="td tnum">{p.share}% <span className="text-muted">({p.answers})</span></td>
+                  {d.engines.map(e => <td key={e} className={`td tnum ${p.byEngine[e] ? '' : 'text-muted'}`}>{p.byEngine[e]}%</td>)}
+                  <td className={`td tnum ${top && you && you.rate < top.rate ? 'font-medium text-bad' : ''}`}>{you ? `${you.rate}%` : '—'}</td>
+                  <td className="td text-sm">{top?.rate ? <>{top.name} <span className="tnum text-muted">{top.rate}%</span></> : '—'}</td>
+                </tr>); })}</tbody>
+            </table>
+          </div>
+          {d.ideas.length > 0 && <div>
+            <div className="label">Questions where AI leans on a platform and names a competitor more than you</div>
+            <CitedIdeas project={project} ideas={d.ideas} readOnly={readOnly} reload={reload} />
+          </div>}
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-2"><div className="label">Most-cited social posts</div>
+              <Segmented size="sm" value={owner} onChange={setOwner} options={[{ value: '', label: 'All' }, { value: 'own', label: 'Yours' }, { value: 'competitor', label: 'Competitors' }, { value: 'third', label: 'Others' }]} /></div>
+            <ul className="mt-1 max-h-[480px] overflow-auto">
+              {d.posts.filter(p => !owner || p.owner === owner).map(p => (
+                <li key={p.url} className="flex items-center justify-between gap-3 border-t border-line py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <a href={safeHref(p.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 truncate hover:underline"><span className="truncate">{p.title || p.url}</span><ExternalLink size={11} className="shrink-0 text-muted" /></a>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                      <PlatformLogo id={p.platform} size={12} /><Badge>{p.label} {p.kind}</Badge><Badge tone={OWNER[p.owner][1]}>{OWNER[p.owner][0]}</Badge>
+                      {p.community && <span>{p.community}</span>}{p.handle && <span>@{p.handle}</span>}
+                      <span>{fmtDate(p.first)}{p.last !== p.first && ` – ${fmtDate(p.last)}`}</span>
+                      {p.brands.length > 0 && <span>· names {p.brands.map(b => `${b.name} ${b.rate}%`).join(', ')}</span>}
+                    </div>
+                  </div>
+                  <span className="flex shrink-0 items-center gap-1.5">{p.engines.map(e => <EngineLogo key={e} id={e} size={13} />)}<span className="tnum w-8 text-right text-xs text-ink2">{p.cited}×</span></span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <p className="text-xs text-muted">Housedge asks the engines through their APIs, which can cite differently from the ChatGPT, Gemini and Perplexity apps. AI also reads many social posts it never cites, so these numbers show the visible part.</p>
+        </>}
+      </div>}
+    </section>
+  );
+}
+
+function CitedIdeas({ project, ideas, readOnly, reload }) {
   const toast = useToast();
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState(null);
   const write = async i => {
     const k = `${i.promptId}|${i.platform}`;
     setBusy(k); setErr(null);
-    try { await api(`/projects/${project.id}/social/posts`, { method: 'POST', body: { promptId: i.promptId, platform: i.platform } }); toast('Post written'); reload(); }
+    try { await api(`/projects/${project.id}/social/posts`, { method: 'POST', body: { promptId: i.promptId, platform: i.platform } }); toast('Draft written: see Other drafts'); reload(); }
     catch (e) { setErr(e); }
     setBusy('');
   };
   return (
-    <Card className="mt-4" title="Posts to write" subtitle="Questions where AI leans on a platform, names a competitor more often than you, and has no post of yours to cite. Highest impact first.">
+    <>
       <ErrorBox error={err} />
-      {!ideas.length ? <p className="text-sm text-muted">No gaps found in this period.</p> : (
-        <ul className="grid gap-3">
-          {ideas.map(i => (
-            <li key={`${i.promptId}|${i.platform}`} className="rounded-xl border border-line p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2"><PlatformLogo id={i.platform} size={14} label /><span className="text-xs text-muted">impact {i.score}</span></div>
-                  <div className="mt-1.5 font-medium">{i.question}</div>
-                  <p className="mt-1 text-[13px] text-ink2">
-                    {i.answers} of {i.ofAnswers} answers cite {i.label}
-                    {i.top ? <> · they name <b>{i.top.name}</b> in {i.top.rate}% and you in {i.ownRate}%</> : <> · you are named in {i.ownRate}%</>}
-                    <span className="ml-1.5 inline-flex translate-y-0.5 gap-1">{i.engines.map(e => <EngineLogo key={e} id={e} size={12} />)}</span>
-                  </p>
-                </div>
-                {!readOnly && <button className={`btn-primary btn-sm ${busy === `${i.promptId}|${i.platform}` ? 'shimmer' : ''}`} disabled={!!busy} onClick={() => write(i)}>
-                  <WandSparkles size={13} />{busy === `${i.promptId}|${i.platform}` ? 'Writing…' : 'Write post'}
-                </button>}
-              </div>
-              {i.examples.length > 0 && <ul className="mt-2 grid gap-1 text-xs">
-                {i.examples.map(e => (
-                  <li key={e.url} className="flex min-w-0 items-center gap-1.5 text-muted">
-                    <PlatformLogo id={e.platform} size={11} /><Badge tone={OWNER[e.owner][1]}>{OWNER[e.owner][0]}</Badge>
-                    <a href={safeHref(e.url)} target="_blank" rel="noopener noreferrer" className="truncate hover:underline">{e.title || e.url}</a>
-                  </li>
-                ))}
-              </ul>}
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
-  );
-}
-
-function Drafts({ drafts, readOnly, reload }) {
-  if (!drafts.length) return null;
-  const remove = async d => { if (!confirm(`Delete the draft "${d.title}"?`)) return; await api(`/drafts/${d.id}`, { method: 'DELETE' }); reload(); };
-  return (
-    <Card className="mt-4" title="Your post drafts" subtitle="Written by Claude from your brand profile and confirmed facts only. Publish them yourself, on your own accounts.">
-      <div className="mb-3 flex items-start gap-2 rounded-lg border border-line px-3 py-2 text-xs text-ink2">
-        <AlertTriangle size={14} className="mt-0.5 shrink-0 text-muted" />
-        Check every fact and fill the [ADD: …] placeholders. Post as yourself and say who you work for: never as a fake customer, and follow each community's rules. After posting, log it in the Work log so Housedge measures whether AI starts citing it.
-      </div>
-      <ul className="grid gap-3">{drafts.map(d => <Draft key={d.id} d={d} onDelete={readOnly ? null : () => remove(d)} />)}</ul>
-    </Card>
-  );
-}
-
-function Draft({ d, onDelete }) {
-  const toast = useToast();
-  const [open, setOpen] = useState(false);
-  const copy = async () => { try { await navigator.clipboard.writeText(`${d.title}\n\n${d.body}`); toast('Copied'); } catch { toast('Copy failed'); } };
-  return (
-    <li className="rounded-xl border border-line">
-      <div className="flex flex-wrap items-center justify-between gap-2 p-4">
-        <button className="flex min-w-0 items-center gap-2 text-left" onClick={() => setOpen(o => !o)} aria-expanded={open}>
-          <FileText size={15} className="shrink-0 text-muted" />
-          <span className="truncate text-sm font-medium">{d.title}</span>
-          <PlatformLogo id={d.platform} size={13} label /><Badge tone="warn">Draft</Badge>
-        </button>
-        <span className="flex items-center gap-2 text-xs text-muted">
-          {fmtDate(d.created_at)}
-          <button className="btn-ghost btn-sm" onClick={copy}><Copy size={13} />Copy</button>
-          {onDelete && <button className="text-muted hover:text-ink" onClick={onDelete} aria-label="Delete draft"><Trash2 size={14} /></button>}
-        </span>
-      </div>
-      {open && (
-        <div className="grid gap-3 border-t border-line p-4 text-sm">
-          <div className="text-xs text-muted">Answers: “{d.question}”</div>
-          {d.where && <div><span className="label">Where to post</span><p className="text-ink2">{d.where}</p></div>}
-          <pre tabIndex={0} className="max-h-[480px] overflow-auto whitespace-pre-wrap rounded-lg bg-fill p-3 font-sans leading-relaxed text-ink2">{d.body}</pre>
-          {d.keywords?.length > 0 && <div className="flex flex-wrap gap-1.5">{d.keywords.map(k => <Badge key={k}>{k}</Badge>)}</div>}
-          {d.notes?.length > 0 && <ul className="list-disc pl-5 text-[13px] text-ink2">{d.notes.map(n => <li key={n}>{n}</li>)}</ul>}
-        </div>
-      )}
-    </li>
+      <ul className="mt-1 grid gap-2">
+        {ideas.slice(0, 8).map(i => { const k = `${i.promptId}|${i.platform}`; return (
+          <li key={k} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line px-4 py-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-[13px]"><PlatformLogo id={i.platform} size={13} label /><span className="inline-flex gap-1">{i.engines.map(e => <EngineLogo key={e} id={e} size={11} />)}</span></div>
+              <div className="mt-1 text-sm font-medium">{i.question}</div>
+              <p className="text-[13px] text-ink2">{i.answers} of {i.ofAnswers} answers cite {i.label}{i.top ? <> and name <b>{i.top.name}</b> in {i.top.rate}% of them, you in {i.ownRate}%</> : <>, you are named in {i.ownRate}%</>}.</p>
+            </div>
+            {!readOnly && <button className={`btn-primary btn-sm ${busy === k ? 'shimmer' : ''}`} disabled={!!busy} onClick={() => write(i)}><WandSparkles size={13} />{busy === k ? 'Writing…' : 'Write it for me'}</button>}
+          </li>); })}
+      </ul>
+    </>
   );
 }

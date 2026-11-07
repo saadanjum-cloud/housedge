@@ -74,6 +74,14 @@ export function analyseHtml(html) {
     scripts: (html.match(/<script\b/gi) || []).length,
     types: [...new Set(types)], orgName, sameAs,
     ogTitle: meta('og:title') || '',
+    // The brand mark, best first: the Organization's logo in JSON-LD, the apple-touch-icon, then any icon link.
+    logo: (() => {
+      const ld = html.match(/"logo"\s*:\s*(?:"([^"]+)"|\{[^}]*?"url"\s*:\s*"([^"]+)")/);
+      const link = re => (html.match(re) || [])[1];
+      return ld?.[1] || ld?.[2]
+        || link(/<link\b[^>]*rel=["'][^"']*apple-touch-icon[^"']*["'][^>]*href=["']([^"']+)["']/i) || link(/<link\b[^>]*href=["']([^"']+)["'][^>]*rel=["'][^"']*apple-touch-icon/i)
+        || link(/<link\b[^>]*rel=["'](?:shortcut )?icon["'][^>]*href=["']([^"']+)["']/i) || link(/<link\b[^>]*href=["']([^"']+)["'][^>]*rel=["'](?:shortcut )?icon["']/i) || '';
+    })(),
   };
 }
 
@@ -147,5 +155,6 @@ export async function runSiteCheck(base) {
 
   const scored = checks.filter(c => c.status !== 'info');
   const score = Math.round(100 * scored.reduce((s, c) => s + (c.status === 'pass' ? 1 : c.status === 'warn' ? 0.5 : 0), 0) / (scored.length || 1));
-  return { url: origin, score, checks };
+  const logo = (() => { try { const u = new URL(h.logo, origin); return u.protocol === 'https:' ? u.href : null; } catch { return null; } })();
+  return { url: origin, score, checks, logo };
 }

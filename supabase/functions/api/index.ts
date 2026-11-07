@@ -267,6 +267,7 @@ async function projectCard(p: any) {
   const now = new Date().toISOString();
   return {
     id: p.id, name: p.name, category: p.category, data_mode: p.data_mode, frequency: p.frequency, last_run_at: p.last_run_at, org_id: p.org_id,
+    logo: (await get("SELECT data->>'logoUrl' l FROM brand_profiles WHERE project_id = ?", p.id))?.l || null,
     own: own ? { name: own.name, visibility: own.visibility, position: own.position, sentiment: own.sentiment, sov: own.sov, rank: own.rank } : null,
     totalAnswers: s.totalAnswers, stage: wf.stages[wf.current], stageIndex: wf.current, complete: wf.complete,
     competitors: s.brands.filter((b: any) => !b.is_own).length,
@@ -317,6 +318,7 @@ R('GET', '/projects/:id', async c => {
   const org = await get('SELECT fee, currency, monthly_budget, public.org_month_spend(id) spent FROM orgs WHERE id = ?', p.org_id);
   const promptCount = await activePrompts(p.id);
   return { ...p, fee: org?.fee ?? null, currency: org?.currency || 'EUR', brands: await M.brandsOf(p.id), workflow: await workflow(p.id),
+    logo: (await get("SELECT data->>'logoUrl' l FROM brand_profiles WHERE project_id = ?", p.id))?.l || null,
     activeRun: await get("SELECT * FROM runs WHERE project_id = ? AND status IN ('running','waiting') ORDER BY id DESC LIMIT 1", p.id) || null,
     lastRun: await get('SELECT * FROM runs WHERE project_id = ? ORDER BY id DESC LIMIT 1', p.id) || null, promptCount,
     budget: { monthly: Number(org?.monthly_budget || 0), spent: Number(org?.spent || 0), runEstimate: promptCount * runnableEngines(p.engines).reduce((s: number, e: string) => s + estPerAnswer(e), 0) } };
@@ -441,6 +443,9 @@ R('POST', '/projects/:id/site-check', async c => {
   const result = await runSiteCheck(`https://${domain}`);
   // Check results are system rows (read-only for people), saved once projectOr404 has confirmed access.
   await asService(() => run('INSERT INTO site_checks (project_id, url, score, results) VALUES (?,?,?,?::jsonb)', p.id, result.url, result.score, JSON.stringify(result)));
+  // The brand's logo, found on its own website, fills the profile's logo address if the client has not set one.
+  if (result.logo) await asService(() => run(`INSERT INTO brand_profiles (project_id, data, updated_at) VALUES (?, jsonb_build_object('logoUrl', ?::text), now())
+    ON CONFLICT (project_id) DO UPDATE SET data = brand_profiles.data || jsonb_build_object('logoUrl', ?::text) WHERE coalesce(brand_profiles.data->>'logoUrl', '') = ''`, p.id, result.logo, result.logo));
   return latestSiteCheck(p.id);
 });
 R('GET', '/projects/:id/facts', async c => factReport((await projectOr404(c.params.id)).id));
@@ -576,10 +581,27 @@ R('GET', '/projects/:id/perception', metric((p, f) => M.perception(p.id, f)));
 R('GET', '/projects/:id/sources', metric((p, f) => M.sources(p.id, f)));
 R('GET', '/projects/:id/social', metric(async (p, f) => ({ ...(await socialView(p.id, f)), scan: await latestScan(p.id) })));
 // The scan searches four platforms and runs about a minute: outside the request transaction, access checked first.
+// Streams progress like the assistant: one JSON event per line, ending with { t: 'done', scan } or { t: 'error' }.
 R('POST', '/projects/:id/social/scan', async c => {
   const p = await asUser(c.user, async (role: string | null) => { c.role = role; if (role) throw fail('Team accounts have read-only access to client dashboards.', 403); return projectOr404(c.params.id); });
-  return scanSocial(p);
+  const enc = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(ctl) {
+      const emit = (e: unknown) => { try { ctl.enqueue(enc.encode(JSON.stringify(e) + '\n')); } catch { /* reader went away */ } };
+      try { emit({ t: 'done', scan: await scanSocial(p, { emit }) }); }
+      catch (e: any) {
+        const shown = e?.expose || e instanceof InputError || e?.code === 'P0001' ? e.message : null;
+        if (!shown) console.error('[social scan]', e);
+        emit({ t: 'error', error: shown || 'The scan failed. Please try again.' });
+      }
+      try { ctl.close(); } catch { /* already closed */ }
+    },
+  });
+  return new Response(stream, { headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' } });
 }, false, true);
+// Re-reads every stored answer with the current brand list and matching rules (no AI cost): after a fix to the
+// matching, or when a brand's aliases changed by hand.
+R('POST', '/projects/:id/reanalyse', async c => { const p = await projectOr404(c.params.id); recount(c, p.id); return { ok: true }; });
 R('POST', '/projects/:id/social/posts', async c => ({ id: await writeSocialPost(await projectOr404(c.params.id), c.body || {}) }));
 R('GET', '/projects/:id/chats', metric((p, f, c) => M.chats(p.id, { ...f, promptId: Number(c.query.prompt) || undefined }, {
   limit: Math.min(100, Math.max(1, Math.floor(Number(c.query.limit)) || 20)), offset: Math.min(1e6, Math.max(0, Math.floor(Number(c.query.offset)) || 0)),

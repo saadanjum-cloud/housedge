@@ -138,7 +138,7 @@ export async function socialView(projectId, f) {
       score: Math.round(100 * reliance * (0.4 + 0.6 * gap) * (0.6 + 0.4 * reach) * (ownPost ? 0.5 : 1)),
       answers: C.answers.size, ofAnswers: perPrompt.get(C.promptId) || 0, engines: [...C.engines].sort(), ownRate, top: top && top.rate ? top : null, examples,
     };
-  }).filter(i => i.score > 0).sort((a, b) => b.score - a.score).slice(0, 25);
+  }).filter(i => i.score > 0 && ((i.top && i.top.rate > i.ownRate) || i.ownRate < 50)).sort((a, b) => b.score - a.score).slice(0, 25); // only real gaps
 
   const drafts = (await all(`SELECT id, kind, title, body, created_at FROM drafts WHERE project_id = ? AND kind LIKE 'social\\_%' ORDER BY id DESC LIMIT 50`, projectId))
     .map(d => ({ ...d, ...parseJSON(d.body, {}), platform: d.kind.slice(7), label: PLATFORMS[d.kind.slice(7)]?.label || d.kind.slice(7) }));

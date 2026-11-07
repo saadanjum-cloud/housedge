@@ -37,7 +37,7 @@ export async function targets(projectId, f, limit = 15) {
   const look = await lookalikeConfig(projectId);
   const picks = (await sources(projectId, f, 200)).domains
     .filter(d => !['own', 'competitor', 'brand'].includes(d.category) && !listed.has(d.domain) && !isLookalikeSite(look, d.domain))
-    .filter(d => d.answers >= 1 && d.with_own / d.answers < 0.5)
+    .filter(d => d.answers >= 2 && d.with_own / d.answers < 0.5) // a site cited once is noise, not a target
     .slice(0, limit);
   return Promise.all(picks.map(async d => {
     const named = await all(`SELECT b.name, COUNT(DISTINCT m.answer_id) n FROM citations c JOIN mentions m ON m.answer_id = c.answer_id JOIN brands b ON b.id = m.brand_id

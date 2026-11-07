@@ -79,7 +79,7 @@ export async function computeActions(projectId, f) {
       key: `lookalike:${l.name.toLowerCase()}`, type: 'accuracy', score: Math.min(95, 70 + l.answers * 3),
       title: `AI confuses ${own.name} with ${l.name}`,
       why: `In ${l.answers} of ${total} answers (${pct(l.answers, total)}%), the AI described ${l.name} when asked about ${own.name}. These answers are not counted as mentions of ${own.name}.`,
-      steps: ['Add the "Company facts" code from the Optimise page: it states who you are and that you are not affiliated with ' + l.name + '.',
+      steps: ['Add the "Company facts" code from the Brand & website page: it states who you are and that you are not affiliated with ' + l.name + '.',
         'Say clearly on your home and About pages what you do, for whom, and that you are not ' + l.name + '.',
         'Check which sites the confused answers cite (Chats page) and make sure your own profiles there are complete and correct.'],
       evidence: { stats: [`${l.answers} confused answers`, `${pct(l.answers, total)}% of all answers`] },
@@ -196,11 +196,25 @@ export async function computeActions(projectId, f) {
       engines: await enginesOf(`SELECT answer_id FROM other_brands WHERE project_id = ? AND lower(name) = lower(?) AND answer_id IN (${af.sql})`, projectId, s.name, ...af.params),
     });
   }
+  // Social: the posts the latest social scan suggests (Social page, step 3). Read from the stored scan; no AI cost.
+  const scan = await get(`SELECT body, created_at FROM drafts WHERE project_id = ? AND kind = 'social_scan' ORDER BY id DESC LIMIT 1`, projectId);
+  const ideas = (parseJSON(scan?.body, {})?.ideas || []).slice(0, 5);
+  const written = new Set((await all(`SELECT body FROM drafts WHERE project_id = ? AND kind LIKE 'social\\_%'`, projectId)).map(r => parseJSON(r.body, {}).question));
+  ideas.forEach((i, n) => {
+    const done = written.has(i.topic);
+    actions.push({
+      key: `social:${i.platform}:${i.topic.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60)}`, type: 'social', score: Math.max(12, 48 - 6 * n - (done ? 20 : 0)),
+      title: `Post on ${i.label}: ${i.title}`, why: i.why,
+      steps: [done ? 'The draft is written: open the Social page, step 4, check every fact and publish it on your own account.' : 'Open the Social page, step 3, and press "Write it for me" to get a draft from your brand profile and facts.',
+        i.angle, 'Post as yourself and say who you work for. Then log it in the Work log so Housedge measures whether AI starts citing it.'],
+      evidence: { stats: [`${i.label}`, `From the social scan of ${String(scan.created_at).slice(0, 10)}`, ...(done ? ['Draft ready'] : [])] }, engines: [], page: 'social',
+    });
+  });
   return finalize(projectId, actions);
 }
 
 async function finalize(projectId, actions) {
-  const LIMIT = { source: 6, content: 6, engine: 2, market: 3, reputation: 1, tracking: 3, website: 5, accuracy: 5 };
+  const LIMIT = { source: 6, content: 6, engine: 2, market: 3, reputation: 1, tracking: 3, website: 5, accuracy: 5, social: 3 };
   const used = {};
   actions.sort((a, b) => b.score - a.score);
   const short = actions.filter(a => (used[a.type] = (used[a.type] || 0) + 1) <= (LIMIT[a.type] || 3));

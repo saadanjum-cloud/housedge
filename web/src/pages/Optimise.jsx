@@ -15,7 +15,7 @@ export default function Optimise() {
   if (!o.data) return <Spinner />;
   return (
     <>
-      <PageHeader title="Optimise" subtitle="Turn the findings into fixes you can publish: clear company facts, website code that AI can read, and draft pages. Housedge never publishes anything itself." />
+      <PageHeader title="Brand & website" subtitle="Your brand profile (the facts every draft is built from), website code that AI can read, and draft pages. Housedge never publishes anything itself." />
       <div className="grid gap-5">
         <Profile project={project} data={o.data} reload={o.reload} readOnly={readOnly} />
         <WebsiteCode data={o.data} project={project} />

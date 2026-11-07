@@ -225,7 +225,7 @@ function Shell({ user }) {
       { to: `/p/${pid}/outreach`, label: 'Outreach', icon: Send },
       { to: `/p/${pid}/work`, label: 'Work log', icon: ListTodo },
       { to: `/p/${pid}/readiness`, label: 'AI readiness', icon: ShieldCheck },
-      { to: `/p/${pid}/optimise`, label: 'Optimise', icon: WandSparkles },
+      { to: `/p/${pid}/optimise`, label: 'Brand & website', icon: WandSparkles },
     ] },
     { group: 'Deliver', items: [
       { to: `/p/${pid}/reports`, label: 'Reports', icon: FileText },
@@ -324,7 +324,7 @@ function ProjectLayout() {
   const timer = useRef();
 
   useEffect(() => { if (p.data?.activeRun) setRunId(p.data.activeRun.id); }, [p.data?.activeRun?.id]);
-  // The website check is free: run it once if it never ran, so AI readiness and Optimise show real results.
+  // The website check is free: run it once if it never ran, so AI readiness and Brand & website show real results.
   useEffect(() => {
     if (readOnly) return;
     api(`/projects/${id}/site-check`).then(r => { if (r.domain && !r.latest) api(`/projects/${id}/site-check`, { method: 'POST' }).catch(() => {}); }).catch(() => {});

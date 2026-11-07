@@ -49,7 +49,11 @@ export default function ProjectSettings() {
           </div>
         </Card>
         <Card title="Data" className="lg:col-span-2">
-          {project.data_mode === 'live' ? <p className="text-sm text-ink2">This project uses <strong>real</strong> AI answers from the engines you connected.</p> : <>
+          {project.data_mode === 'live' ? <>
+            <p className="text-sm text-ink2">This project uses <strong>real</strong> AI answers from the engines you connected.</p>
+            {!readOnly && <p className="mt-3 text-sm text-ink2">If a brand was missed in old answers (for example after adding an alias), re-read them with the current brand list. No AI cost; takes a few seconds.
+              <button className="btn-ghost btn-sm ml-2" onClick={async () => { try { await api(`/projects/${project.id}/reanalyse`, { method: 'POST' }); toast('Answers re-read'); reload(); } catch (e) { setErr(e.message); } }}>Re-read all answers</button></p>}
+          </> : <>
             <SimBanner show>This project uses simulated demo answers.</SimBanner>
             <p className="mt-3 text-sm text-ink2">When your AI accounts are connected (Settings → AI engines) and a spending cap is set, you can switch this project to real data. The simulated answers will be removed so they can never be mixed up with real ones. A full backup is made first.</p>
             {!readOnly && <button className="btn-primary mt-3" disabled={user.role !== 'admin'} onClick={() => setLive(true)}>Switch this project to real data…</button>}
