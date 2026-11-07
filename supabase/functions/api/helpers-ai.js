@@ -221,6 +221,11 @@ export async function writeSocialPost(project, { promptId, platform, topic, angl
 // returned are kept, so no post in the results is made up. Runs outside a request transaction (about a minute).
 // ponytail: four platforms, one search call each; add X/TikTok when Google's index of them proves useful.
 export const SCAN_PLATFORMS = ['reddit', 'linkedin', 'youtube', 'quora'];
+// How each platform is searched (tested Nov 2026). Google Search (Gemini grounding) finds Reddit, YouTube and Quora
+// posts when every query carries the platform's name. Claude's search cannot reach Reddit (blocked) and finds
+// nothing on YouTube or LinkedIn. LinkedIn returns nothing through Google either: null = cannot be searched yet.
+const SCAN_SEARCH = { reddit: 'native', youtube: 'native', quora: 'native', linkedin: null };
+export const SCAN_UNAVAILABLE = { linkedin: 'LinkedIn keeps its posts behind a sign-in, and no search engine Housedge can use returns them. Post there yourself; the AI check still shows LinkedIn pages when an engine cites one.' };
 const SCAN_EST = 0.3;
 const SCAN_SCHEMA = { type: 'object', additionalProperties: false, required: ['platforms', 'ideas'], properties: {
   platforms: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['platform', 'summary', 'themes', 'posts'], properties: {
@@ -276,11 +281,14 @@ export async function scanSocial(project, { emit = () => {} } = {}) {
   const until = Date.now() + 100_000;
   const searchOne = async platform => {
     const { label, hosts } = PLATFORMS[platform];
-    const r = await askOpenRouter('gemini', `Search Google for ${label} posts (use site:${hosts[0]} in your searches) where people discuss the market of ${p.name}` +
+    if (!SCAN_SEARCH[platform]) throw Object.assign(new Error(SCAN_UNAVAILABLE[platform] || 'not searchable'), { unavailable: true });
+    const word = label.toLowerCase();
+    const r = await askOpenRouter('gemini', `Search Google for ${label} posts where people discuss the market of ${p.name}` +
       `${p.category ? ` (${p.category})` : ''}, ${p.name} itself, and these competitors: ${competitors.join(', ') || 'none listed'}.\n` +
       `Questions customers ask:\n${questions.map(x => `- ${x}`).join('\n')}\n\n` +
-      `Run several searches. Then list up to 10 of the most relevant ${label} posts you found: title, community or author, roughly when, which brands it names and how people feel about them, and what people ask or complain about. Finish with 3-5 bullets on the topics that come up most.`,
-    { ...conf, until, maxTokens: 4000 });
+      `IMPORTANT: every search query you run must contain the word "${word}" (for example "${p.name.toLowerCase()} vs ${(competitors[0] || 'alternatives').toLowerCase()} ${word}"), so that only ${label} pages come back; ignore any result that is not on ${hosts[0]}. Run at least 5 searches. ` +
+      `Then list up to 10 of the most relevant ${label} posts you found: title, community or author, roughly when, which brands it names and how people feel about them, and what people ask or complain about. Finish with 3-5 bullets on the topics that come up most.`,
+    { ...conf, search: SCAN_SEARCH[platform], until, maxTokens: 4000 });
     await asService(() => run('INSERT INTO ai_spend (org_id, project_id, kind, model, cost, in_tokens, out_tokens) VALUES (?,?,?,?,?,?,?)',
       project.org_id, project.id, 'social_scan', r.model, r.cost, r.inT, r.outT));
     const seen = new Set();
@@ -289,10 +297,10 @@ export async function scanSocial(project, { emit = () => {} } = {}) {
     emit({ t: 'platform', platform, posts: posts.length });
     return { platform, label, notes: r.text.slice(0, 6000), posts, cost: r.cost };
   };
-  const searched = await Promise.allSettled(SCAN_PLATFORMS.map(platform => searchOne(platform).catch(e => { emit({ t: 'platform', platform, posts: 0, failed: true }); throw e; })));
+  const searched = await Promise.allSettled(SCAN_PLATFORMS.map(platform => searchOne(platform).catch(e => { emit({ t: 'platform', platform, posts: 0, failed: !e.unavailable, unavailable: !!e.unavailable }); throw e; })));
   const ok = searched.filter(x => x.status === 'fulfilled').map(x => x.value).filter(x => x.posts.length);
   if (!ok.length) {
-    const why = searched.find(x => x.status === 'rejected')?.reason?.message;
+    const why = searched.find(x => x.status === 'rejected' && !x.reason?.unavailable)?.reason?.message;
     throw fail(why ? `The search failed: ${String(why).slice(0, 200)}` : 'Google returned no social posts for this brand and its questions. Add more questions or competitors and try again.');
   }
   const brandsKnown = [p.name, ...competitors];
@@ -312,8 +320,9 @@ export async function scanSocial(project, { emit = () => {} } = {}) {
     }),
     ideas: (data.ideas || []).filter(i => ok.some(x => x.platform === i.platform)).slice(0, 10).map(i => ({ platform: i.platform, label: PLATFORMS[i.platform].label,
       topic: String(i.topic).slice(0, 300), title: String(i.title).slice(0, 200), angle: String(i.angle).slice(0, 600), why: String(i.why).slice(0, 400) })),
-    failed: searched.map((x, i) => (x.status === 'rejected' ? PLATFORMS[SCAN_PLATFORMS[i]].label : null)).filter(Boolean),
-    searched: searched.map((x, i) => ({ platform: SCAN_PLATFORMS[i], label: PLATFORMS[SCAN_PLATFORMS[i]].label, posts: x.status === 'fulfilled' ? x.value.posts.length : 0, failed: x.status === 'rejected' })),
+    failed: searched.map((x, i) => (x.status === 'rejected' && !x.reason?.unavailable ? PLATFORMS[SCAN_PLATFORMS[i]].label : null)).filter(Boolean),
+    searched: searched.map((x, i) => ({ platform: SCAN_PLATFORMS[i], label: PLATFORMS[SCAN_PLATFORMS[i]].label, posts: x.status === 'fulfilled' ? x.value.posts.length : 0,
+      failed: x.status === 'rejected' && !x.reason?.unavailable, unavailable: x.status === 'rejected' && x.reason?.unavailable ? x.reason.message : null })),
     brands: brandsKnown,
   };
   const total = cost + ok.reduce((t, x) => t + x.cost, 0);

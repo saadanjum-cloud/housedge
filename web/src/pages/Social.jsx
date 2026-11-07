@@ -41,7 +41,7 @@ export default function Social() {
     setScanning({ steps: Object.fromEntries(SCAN_PLATFORMS.map(p => [p, 'searching'])), reading: false }); setScanErr(null);
     try {
       await apiStream(`/projects/${project.id}/social/scan`, {}, e => {
-        if (e.t === 'platform') setScanning(x => x && ({ ...x, steps: { ...x.steps, [e.platform]: e.failed ? 'failed' : e.posts } }));
+        if (e.t === 'platform') setScanning(x => x && ({ ...x, steps: { ...x.steps, [e.platform]: e.unavailable ? 'unavailable' : e.failed ? 'failed' : e.posts } }));
         if (e.t === 'reading') setScanning(x => x && ({ ...x, reading: true }));
       });
       toast('Scan finished'); s.reload();
@@ -99,7 +99,7 @@ function ScanSummary({ scan, own }) {
             <PlatformLogo id={r.platform} size={18} />
             <div className="min-w-0 text-[13px]">
               <div className="font-semibold">{r.label}</div>
-              <div className="text-muted">{r.failed ? 'search failed, try again' : !r.posts ? 'nothing relevant found' : <>{r.posts} posts · you in {named}{missing > 0 && <span className="text-bad"> · {missing} without you</span>}</>}</div>
+              <div className="text-muted">{r.unavailable ? <span title={r.unavailable}>cannot be searched yet</span> : r.failed ? 'search failed, try again' : !r.posts ? 'nothing relevant found' : <>{r.posts} posts · you in {named}{missing > 0 && <span className="text-bad"> · {missing} without you</span>}</>}</div>
             </div>
           </li>
         );
@@ -139,8 +139,8 @@ function ScanProgress({ own, competitors, state }) {
       </div>
       <ul className="mt-6 grid gap-1.5">
         {SCAN_PLATFORMS.map(p => { const st = state.steps[p]; return (
-          <Row key={p} status={st === 'searching' ? 'working' : st === 'failed' ? 'failed' : 'done'} logo={<PlatformLogo id={p} size={14} />}>
-            <span className="font-medium">{SCAN_LABEL[p]}</span><span className="ml-2 text-muted">{st === 'searching' ? 'searching…' : st === 'failed' ? 'the search failed' : st === 0 ? 'nothing relevant found' : `${st} posts found`}</span>
+          <Row key={p} status={st === 'searching' ? 'working' : st === 'failed' || st === 'unavailable' ? 'failed' : 'done'} logo={<PlatformLogo id={p} size={14} />}>
+            <span className="font-medium">{SCAN_LABEL[p]}</span><span className="ml-2 text-muted">{st === 'searching' ? 'searching…' : st === 'unavailable' ? 'cannot be searched yet' : st === 'failed' ? 'the search failed' : st === 0 ? 'nothing relevant found' : `${st} posts found`}</span>
           </Row>); })}
         <Row status={state.reading ? 'working' : 'waiting'} logo={<EngineLogo id="claude" size={14} />}>
           <span className="font-medium">Claude</span><span className="ml-2 text-muted">{state.reading ? 'reading the posts and writing the post ideas…' : 'waits for the searches'}</span>
