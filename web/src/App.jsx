@@ -36,6 +36,7 @@ import ProjectSwitcher from './ProjectSwitcher.jsx';
 const Optimise = lazy(() => import('./pages/Optimise.jsx'));
 const WorkLog = lazy(() => import('./pages/WorkLog.jsx'));
 const Account = lazy(() => import('./pages/Account.jsx'));
+const Connect = lazy(() => import('./pages/Connect.jsx'));
 const Outreach = lazy(() => import('./pages/Outreach.jsx'));
 const Ask = lazy(() => import('./pages/Ask.jsx'));
 
@@ -103,6 +104,7 @@ function Authed({ user, bare, children }) {
               <Route path="/" element={team ? <Navigate to="/admin" replace /> : <ClientHome />} />
               {/* The team's own area lives under /admin; clients are sent back to their dashboard. */}
               <Route path="/account" element={<Account />} />
+              <Route path="/connect" element={<Connect />} />
               <Route path="/admin" element={team ? <AdminClients /> : <Navigate to="/" replace />} />
               <Route path="/admin/clients" element={team ? <Projects /> : <Navigate to="/" replace />} />
               <Route path="/admin/new" element={<Navigate to={team ? '/admin?new=1' : '/'} replace />} />
@@ -257,6 +259,7 @@ function Shell({ user }) {
           <NavItem to="/admin/settings" icon={Settings} label="Settings" />
         </> : <NavItem to="/" end icon={FolderKanban} label="Projects" />}
         <div className="mt-2 px-1"><ThemeSwitch /></div>
+        <Link to="/connect" className="px-1 text-[11px] text-muted hover:text-ink hover:underline">Use in Claude and ChatGPT</Link>
         <Link to="/account" className="truncate px-1 text-[11px] text-muted hover:text-ink hover:underline" title="Your account">{user.email}</Link>
         <button onClick={logout} className="btn-ghost btn-sm mt-1 justify-center"><LogOut size={14} />Sign out</button>
         <LegalLinks className="mt-2 px-1" />
