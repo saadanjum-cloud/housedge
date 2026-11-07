@@ -37,6 +37,7 @@ export default function Social() {
   const own = project.brands.find(b => b.is_own)?.name || project.name;
   const [scanning, setScanning] = useState(null); // null, or { steps: { reddit: 'searching' | n | 'failed' }, reading }
   const [scanErr, setScanErr] = useState(null);
+  const [plat, setPlat] = useState(''); // '' = every platform; else only this one, everywhere on the page
   const scan = async () => {
     setScanning({ steps: Object.fromEntries(SCAN_PLATFORMS.map(p => [p, 'searching'])), reading: false }); setScanErr(null);
     try {
@@ -54,57 +55,58 @@ export default function Social() {
   const otherDrafts = d ? d.drafts.filter(x => !(d.scan?.ideas || []).some(i => draftOf([x], i))) : [];
   return (
     <>
-      <PageHeader title="Social" subtitle={`Find the conversations about your market on Reddit, LinkedIn, YouTube and Quora, see where competitors get recommended and ${own} does not, and publish posts that fill the gap.`} />
+      <PageHeader title="Social" subtitle={`Find the conversations about your market on Reddit, LinkedIn, YouTube and Quora, see where competitors get recommended and ${own} does not, and publish posts that fill the gap.`}
+        right={scanBtn} />
+      {d && <PlatformBar scan={d.scan} own={own} plat={plat} setPlat={setPlat} />}
       <ErrorBox error={scanErr} />
       <SimBanner show={project.data_mode !== 'live'}>The posts below are made up for the demo.</SimBanner>
       {!d ? <Spinner /> : (
         <div className="grid gap-4">
           {scanning ? <ScanProgress own={own} competitors={project.brands.filter(b => !b.is_own).length} state={scanning} /> : (
-            <Step n={1} title="Scan the platforms" right={scanBtn}
-              subtitle={`${d.scan ? `Last scan ${fmtDate(d.scan.at)}. ` : ''}Google Search looks through each platform for posts about your market, ${own} and your competitors, and Claude reads what it finds. About a minute. Nothing is posted anywhere.`}>
-              {d.scan ? <ScanSummary scan={d.scan} own={own} /> : readOnly ? <p className="text-sm text-muted">The client runs the scan.</p> : <p className="text-sm text-ink2">No scan yet. Press <b>Scan now</b> to start.</p>}
+            !d.scan && <Step n={1} title="Scan the platforms"
+              subtitle={`Google Search looks through each platform for posts about your market, ${own} and your competitors, and Claude reads what it finds. About a minute. Nothing is posted anywhere.`}>
+              {readOnly ? <p className="text-sm text-muted">The client runs the scan.</p> : <p className="text-sm text-ink2">No scan yet. Press <b>Scan now</b> to start.</p>}
             </Step>
           )}
 
-          {d.scan && <Step n={2} title="What people say, and where you are missing" subtitle="One tab per platform: what people keep asking, the posts found, who each post names, and how it talks about you.">
-            <Platforms scan={d.scan} own={own} />
+          {d.scan && <Step n={1} title="What people say, and where you are missing" subtitle={`Scan of ${fmtDate(d.scan.at)}. What people keep asking, the posts found, who each post names, and how it talks about you.`}>
+            <Platforms scan={d.scan} own={own} plat={plat} setPlat={setPlat} />
           </Step>}
 
-          {d.scan && <Step n={3} title="Make these posts" subtitle="Where people ask something your competitors get recommended for, or misunderstand you. Most valuable first. Press “Write it for me” and the draft appears right here, written for your own account from your brand profile and confirmed facts only.">
-            <Ideas project={project} ideas={d.scan.ideas} drafts={d.drafts} readOnly={readOnly} reload={s.reload} />
+          {d.scan && <Step n={2} title="Make these posts" subtitle="Where people ask something your competitors get recommended for, or misunderstand you. Most valuable first. Press “Write it for me”: the draft is written for your own account from your brand profile and confirmed facts only, and appears under the idea.">
+            <Ideas project={project} ideas={d.scan.ideas.filter(i => !plat || i.platform === plat)} drafts={d.drafts} readOnly={readOnly} reload={s.reload} />
           </Step>}
 
-          {otherDrafts.length > 0 && <Step n={d.scan ? 4 : 2} title="Other drafts" subtitle="Drafts from earlier scans and from the questions below.">
-            <ul className="grid gap-3">{otherDrafts.map(x => <Draft key={x.id} d={x} readOnly={readOnly} reload={s.reload} />)}</ul>
+          {otherDrafts.filter(x => !plat || x.platform === plat).length > 0 && <Step n={d.scan ? 3 : 1} title="Other drafts" subtitle="Drafts from earlier scans and from the questions below.">
+            <ul className="grid gap-3">{otherDrafts.filter(x => !plat || x.platform === plat).map(x => <Draft key={x.id} d={x} readOnly={readOnly} reload={s.reload} />)}</ul>
           </Step>}
 
-          <Cited d={d} project={project} readOnly={readOnly} reload={s.reload} />
+          <Cited d={d} project={project} readOnly={readOnly} reload={s.reload} plat={plat} />
         </div>
       )}
     </>
   );
 }
 
-// ---------------------------------------------------------------- step 1
-function ScanSummary({ scan, own }) {
-  const rows = scan.searched || scan.platforms.map(p => ({ platform: p.platform, label: p.label, posts: p.posts.length }));
+// ---------------------------------------------------------------- the platform bar: status of each platform, and a filter for the whole page
+function PlatformBar({ scan, own, plat, setPlat }) {
+  const rows = scan ? (scan.searched || scan.platforms.map(p => ({ platform: p.platform, label: p.label, posts: p.posts.length }))) : SCAN_PLATFORMS.map(p => ({ platform: p, label: SCAN_LABEL[p], posts: 0, none: true }));
   return (
-    <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <button className={`chip ${!plat ? 'chip-on' : ''}`} onClick={() => setPlat('')}>All platforms</button>
       {rows.map(r => {
-        const p = scan.platforms.find(x => x.platform === r.platform);
+        const p = scan?.platforms.find(x => x.platform === r.platform);
         const named = p ? p.posts.filter(x => x.brands.some(b => same(b, own))).length : 0;
         const missing = p ? p.posts.filter(x => x.brands.length && !x.brands.some(b => same(b, own))).length : 0;
+        const status = r.none ? 'not scanned yet' : r.unavailable ? 'cannot be searched yet' : r.failed ? 'search failed' : !r.posts ? 'nothing found' : `${r.posts} posts · you in ${named}${missing ? ` · ${missing} without you` : ''}`;
         return (
-          <li key={r.platform} className="flex items-center gap-3 rounded-xl border border-line px-3 py-2.5">
-            <PlatformLogo id={r.platform} size={18} />
-            <div className="min-w-0 text-[13px]">
-              <div className="font-semibold">{r.label}</div>
-              <div className="text-muted">{r.unavailable ? <span title={r.unavailable}>cannot be searched yet</span> : r.failed ? 'search failed, try again' : !r.posts ? 'nothing relevant found' : <>{r.posts} posts · you in {named}{missing > 0 && <span className="text-bad"> · {missing} without you</span>}</>}</div>
-            </div>
-          </li>
+          <button key={r.platform} className={`chip flex items-center gap-2 py-1.5 ${plat === r.platform ? 'chip-on' : ''}`} onClick={() => setPlat(plat === r.platform ? '' : r.platform)} title={r.unavailable || status} disabled={!r.posts && !p}>
+            <PlatformLogo id={r.platform} size={14} />
+            <span className="text-left leading-tight"><span className="block font-semibold">{r.label}</span><span className={`block text-[11px] ${missing ? 'text-bad' : 'text-muted'}`}>{status}</span></span>
+          </button>
         );
       })}
-    </ul>
+    </div>
   );
 }
 
@@ -151,9 +153,10 @@ function ScanProgress({ own, competitors, state }) {
 }
 
 // ---------------------------------------------------------------- step 2
-function Platforms({ scan, own }) {
-  const [open, setOpen] = useState(scan.platforms[0]?.platform || '');
+function Platforms({ scan, own, plat, setPlat }) {
   const [missing, setMissing] = useState(false);
+  const open = plat && scan.platforms.some(p => p.platform === plat) ? plat : scan.platforms[0]?.platform || '';
+  const setOpen = v => { setPlat(v); setMissing(false); };
   const cur = scan.platforms.find(p => p.platform === open);
   if (!cur) return <p className="text-sm text-muted">No posts were found on any platform. Add more questions or competitors and scan again.</p>;
   const lacking = cur.posts.filter(x => x.brands.length && !x.brands.some(b => same(b, own)));
@@ -162,7 +165,7 @@ function Platforms({ scan, own }) {
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Segmented value={open} onChange={v => { setOpen(v); setMissing(false); }} options={scan.platforms.map(p => ({ value: p.platform, label: `${p.label} (${p.posts.length})` }))} />
+        <Segmented value={open} onChange={setOpen} options={scan.platforms.map(p => ({ value: p.platform, label: `${p.label} (${p.posts.length})` }))} />
         <span className="text-[13px] text-ink2">{own} is named in <b>{named}</b> of {cur.posts.length} posts{lacking.length > 0 && <>, and <b className="text-bad">{lacking.length}</b> name only competitors</>}.</span>
       </div>
       <div className="mt-4 grid gap-5 lg:grid-cols-5">
@@ -230,7 +233,7 @@ function Ideas({ project, ideas, drafts, readOnly, reload }) {
                 </div>
                 {!readOnly && !draft && <button className={`btn-primary btn-sm ${busy === n ? 'shimmer' : ''}`} disabled={busy >= 0} onClick={() => write(i, n)}><WandSparkles size={13} />{busy === n ? 'Writing…' : 'Write it for me'}</button>}
               </div>
-              {draft && <ul className="mt-3"><Draft d={draft} readOnly={readOnly} reload={reload} startOpen /></ul>}
+              {draft && <ul className="mt-3"><Draft d={draft} readOnly={readOnly} reload={reload} /></ul>}
             </li>
           );
         })}
@@ -251,6 +254,7 @@ function Draft({ d, readOnly, reload, startOpen = false }) {
         <button className="flex min-w-0 items-center gap-2 text-left" onClick={() => setOpen(o => !o)} aria-expanded={open}>
           <FileText size={15} className="shrink-0 text-muted" /><span className="truncate text-sm font-medium">{d.title}</span>
           <PlatformLogo id={d.platform} size={13} label /><Badge tone="warn">Draft</Badge>
+          <span className="text-xs text-accent">{open ? 'Hide' : 'Open the draft'}</span>
         </button>
         <span className="flex items-center gap-2 text-xs text-muted">
           {fmtDate(d.created_at)}
@@ -272,7 +276,7 @@ function Draft({ d, readOnly, reload, startOpen = false }) {
 }
 
 // ---------------------------------------------------------------- for the curious: what the AI engines cite from social
-function Cited({ d, project, readOnly, reload }) {
+function Cited({ d, project, readOnly, reload, plat }) {
   const [open, setOpen] = useState(false);
   const [owner, setOwner] = useState('');
   const ownName = project.brands.find(b => b.is_own)?.name;
@@ -289,7 +293,7 @@ function Cited({ d, project, readOnly, reload }) {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr><th className="th">Platform</th><th className="th">Answers citing it</th>{d.engines.map(e => <th key={e} className="th"><EngineLogo id={e} /></th>)}<th className="th">{ownName} named</th><th className="th">Competitor named most</th></tr></thead>
-              <tbody>{d.platforms.map(p => { const you = p.brands.find(b => b.own), top = p.brands.find(b => !b.own); return (
+              <tbody>{d.platforms.filter(p => !plat || p.platform === plat).map(p => { const you = p.brands.find(b => b.own), top = p.brands.find(b => !b.own); return (
                 <tr key={p.platform}>
                   <td className="td font-medium"><PlatformLogo id={p.platform} label /></td>
                   <td className="td tnum">{p.share}% <span className="text-muted">({p.answers})</span></td>
@@ -301,13 +305,13 @@ function Cited({ d, project, readOnly, reload }) {
           </div>
           {d.ideas.length > 0 && <div>
             <div className="label">Questions where AI leans on a platform and names a competitor more than you</div>
-            <CitedIdeas project={project} ideas={d.ideas} readOnly={readOnly} reload={reload} />
+            <CitedIdeas project={project} ideas={d.ideas.filter(i => !plat || i.platform === plat)} readOnly={readOnly} reload={reload} />
           </div>}
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2"><div className="label">Most-cited social posts</div>
               <Segmented size="sm" value={owner} onChange={setOwner} options={[{ value: '', label: 'All' }, { value: 'own', label: 'Yours' }, { value: 'competitor', label: 'Competitors' }, { value: 'third', label: 'Others' }]} /></div>
             <ul className="mt-1 max-h-[480px] overflow-auto">
-              {d.posts.filter(p => !owner || p.owner === owner).map(p => (
+              {d.posts.filter(p => (!owner || p.owner === owner) && (!plat || p.platform === plat)).map(p => (
                 <li key={p.url} className="flex items-center justify-between gap-3 border-t border-line py-2.5 text-sm">
                   <div className="min-w-0">
                     <a href={safeHref(p.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 truncate hover:underline"><span className="truncate">{p.title || p.url}</span><ExternalLink size={11} className="shrink-0 text-muted" /></a>

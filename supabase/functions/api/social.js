@@ -140,7 +140,7 @@ export async function socialView(projectId, f) {
     };
   }).filter(i => i.score > 0 && ((i.top && i.top.rate > i.ownRate) || i.ownRate < 50)).sort((a, b) => b.score - a.score).slice(0, 25); // only real gaps
 
-  const drafts = (await all(`SELECT id, kind, title, body, created_at FROM drafts WHERE project_id = ? AND kind LIKE 'social\\_%' ORDER BY id DESC LIMIT 50`, projectId))
+  const drafts = (await all(`SELECT id, kind, title, body, created_at FROM drafts WHERE project_id = ? AND kind LIKE 'social\\_%' AND kind <> 'social_scan' ORDER BY id DESC LIMIT 50`, projectId))
     .map(d => ({ ...d, ...parseJSON(d.body, {}), platform: d.kind.slice(7), label: PLATFORMS[d.kind.slice(7)]?.label || d.kind.slice(7) }));
   return {
     totalAnswers: answers.length, socialAnswers: socialAnswers.size, engines, platforms, ideas, drafts,
